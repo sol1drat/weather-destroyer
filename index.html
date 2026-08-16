@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#FF8C00">
+<title>Weather Destroyer</title>
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  html, body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    width: 100%;
+    height: 100%;
+    position: fixed;
+    top: 0;
+    left: 0;
+    background: #FF8C00;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #FFFFFF;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-user-select: none;
+    user-select: none;
+    overscroll-behavior: none;
+  }
+  #gameCanvas {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    touch-action: none;
+  }
+</style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+  <script>
+    'use strict';
+
+    // ====================================================================
+    // Weather Destroyer - a minimalist tug-of-war arcade game
+    // Background (Warmth) is solid orange (#FF8C00) on the body.
+    // An off-screen destruction canvas holds the grey (#333333) "Weather"
+    // overlay. The player erases it with destination-out to reveal warmth.
+    // Weather fights back via rain, edge creep and wind gusts.
+    // ====================================================================
+
+    // ===== Visible canvas (only one in the DOM) =========================
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Off-screen destruction layer (buffer, not in DOM).
+    // Persistent across frames so erased areas stay erased.
+    const destroyCanvas = document.createElement('canvas');
+    const dctx = destroyCanvas.getContext('2d');
+
+    // ===== Geometry / warmth grid =======================================
+    let W = 0, H = 0;
+    const CELL = 16;                       // grid cell size for warmth tracking
+    let cols = 1, rows = 1, totalCells = 1;
+    let warmthGrid = new Float32Array(1); // 1 = warm (orange visible), 0 = cold (grey)
+    let warmCellCount = 0;                 // running count, avoids full-grid scans
+
+    function setupCanvas() {
+      W = window.innerWidth;
+      H = window.innerHeight;
+      canvas.width = W;
+      canvas.height = H;
+      destroyCanvas.width = W;
+      destroyCanvas.height = H;
+      cols = Math.ceil(W / CELL) + 1;
+      rows = Math.ceil(H / CELL) + 1;
+      totalCells = cols * rows;
+      warmthGrid = new Float32Array(cols * rows);
+      warmCellCount = 0;
+      // Paint destroy layer fully grey (start / restart baseline)
+      dctx.globalCompositeOperation = 'source-over';
+      dctx.fillStyle = '#333333';
+      dctx.fillRect(0, 0, W, H);
+    }
+
+    // ===== Game state ==================================================
+    const STATE_START    = 'START';
+    const STATE_PLAYING  = 'PLAYING';
+    const STATE_GAMEOVER = 'GAMEOVER';
+
+    let state        = STATE_START;
+    let score        = 0;
+    let bestScore    = parseInt(localStorage.getItem('weatherDestroyerBest') || '0', 10);
+    let elapsed      = 0;          // seconds survived
+    let intensity    = 1;           // scales every 30s
+    let hasErased    = false;       // prevent instant game-over before first erase
+
+    let raindrops         = [];
+    let spawnAccumulator  = 0;
+    const MAX_RAIN        = 220;
+
+    let windGust  = null;
+    let windTimer = 4;
+
+    let lastEdgePaint        = 0;
+    const EDGE_CREEP_SPEED   = 1.5; // px per second (base)
+
+    let lastPos  = null;
+    let lastTime = 0;
+
+    // ===== Grid helpers (mathematical warmth tracking) =================
+    function markWarm(x, y, r) {
+      const cx = Math.floor(x / CELL);
+      const cy = Math.floor(y / CELL);
+      const cr = Math.ceil(r / CELL);
+      const cr2 = cr * cr;
+      for (let dy = -cr; dy <= cr; dy++) {
+        for (let dx = -cr; dx <= cr; dx++) {
+          const gx = cx + dx, gy = cy + dy;
+          if (gx < 0 || gx >= cols || gy < 0 || gy >= rows) continue;
+          if (dx * dx + dy * dy <= cr2) {
+            const idx = gy * cols + gx;
+            if (warmthGrid[idx] < 0.5) {
+              warmthGrid[idx] = 1;
+              warmCellCount++;
+            }
+          }
+        }
+      }
+    }
+
+    function markCold(x, y, r) {
+      const cx = Math.floor(x / CELL);
+      const cy = Math.floor(y / CELL);
+      const cr = Math.ceil(r / CELL);
+      const cr2 = cr * cr;
+      for (let dy = -cr; dy <= cr; dy++) {
+        for (let dx = -cr; dx <= cr; dx++) {
+          const gx = cx + dx, gy = cy + dy;
+          if (gx < 0 || gx >= cols || gy < 0 || gy >= rows) continue;
+          if (dx * dx + dy * dy <= cr2) {
+            const idx = gy * cols + gx;
+            if (warmthGrid[idx] > 0.5) {
+              warmthGrid[idx] = 0;
+              warmCellCount--;
+            }
+          }
+        }
+      }
+    }
+
+    function markColdRect(x1, y1, x2, y2) {
+      const gx1 = Math.max(0, Math.floor(x1 / CELL));
+      const gx2 = Math.min(cols - 1, Math.floor(x2 / CELL));
+      const gy1 = Math.max(0, Math.floor(y1 / CELL));
+      const gy2 = Math.min(rows - 1, Math.floor(y2 / CELL));
+      for (let gy = gy1; gy <= gy2; gy++) {
+        for (let gx = gx1; gx <= gx2; gx++) {
+          const idx = gy * cols + gx;
+          if (warmthGrid[idx] > 0.5) {
+            warmthGrid[idx] = 0;
+            warmCellCount--;
+          }
+        }
+      }
+    }
+
+    // ===== Erase / paint primitives =====================================
+    function erase(x, y, r) {
+      dctx.globalCompositeOperation = 'destination-out';
+      dctx.fillStyle = '#000000';
+      dctx.beginPath();
+      dctx.arc(x, y, r, 0, Math.PI * 2);
+      dctx.fill();
+      markWarm(x, y, r);
+      hasErased = true;
+    }
+
+    function eraseLine(x1, y1, x2, y2, r) {
+      dctx.globalCompositeOperation = 'destination-out';
+      dctx.strokeStyle = '#000000';
+      dctx.lineWidth = r * 2;
+      dctx.lineCap = 'round';
+      dctx.lineJoin = 'round';
+      dctx.beginPath();
+      dctx.moveTo(x1, y1);
+      dctx.lineTo(x2, y2);
+      dctx.stroke();
+      // Sample the segment so the grid tracks the actual erased path
+      const dx = x2 - x1, dy = y2 - y1;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const steps = Math.max(1, Math.ceil(dist / 6));
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        markWarm(x1 + dx * t, y1 + dy * t, r);
+      }
+      hasErased = true;
+    }
+
+    function paintGreyDot(x, y, r) {
+      dctx.globalCompositeOperation = 'source-over';
+      dctx.fillStyle = '#333333';
+      dctx.beginPath();
+      dctx.arc(x, y, r, 0, Math.PI * 2);
+      dctx.fill();
+      markCold(x, y, r);
+    }
+
+    function paintGreyRect(x, y, w, h) {
+      dctx.globalCompositeOperation = 'source-over';
+      dctx.fillStyle = '#333333';
+      dctx.fillRect(x, y, w, h);
+      markColdRect(x, y, x + w, y + h);
+    }
+
+    // ===== Weather: Rain ===============================================
+    function spawnRaindrop() {
+      if (raindrops.length >= MAX_RAIN) return;
+      raindrops.push({
+        x: Math.random() * W,
+        y: -20 - Math.random() * 40,
+        vy: 220 + Math.random() * 80 + intensity * 40,
+        vx: 0,
+        length: 12 + Math.random() * 8
+      });
+    }
+
+    function updateRain(dt) {
+      const spawnRate = 30 + intensity * 10;
+      spawnAccumulator += spawnRate * dt;
+      while (spawnAccumulator >= 1) {
+        spawnRaindrop();
+        spawnAccumulator -= 1;
+      }
+
+      for (let i = raindrops.length - 1; i >= 0; i--) {
+        const r = raindrops[i];
+        r.x += r.vx * dt;
+        r.y += r.vy * dt;
+
+        if (r.y > H + 20 || r.x < -30 || r.x > W + 30) {
+          raindrops.splice(i, 1);
+          continue;
+        }
+
+        // If the drop enters a warm (cleared) cell, splat a grey dot
+        const gx = Math.floor(r.x / CELL);
+        const gy = Math.floor(r.y / CELL);
+        if (gx >= 0 && gx < cols && gy >= 0 && gy < rows) {
+          if (warmthGrid[gy * cols + gx] > 0.5) {
+            paintGreyDot(r.x, r.y, 7);
+            raindrops.splice(i, 1);
+          }
+        }
+      }
+    }
+
+    function updateRainOnly(dt) {
+      // Start-state rain: visual only, no splat (no warm cells exist)
+      const spawnRate = 40;
+      spawnAccumulator += spawnRate * dt;
+      while (spawnAccumulator >= 1) {
+        spawnRaindrop();
+        spawnAccumulator -= 1;
+      }
+      for (let i = raindrops.length - 1; i >= 0; i--) {
+        const r = raindrops[i];
+        r.y += r.vy * dt;
+        if (r.y > H + 20) raindrops.splice(i, 1);
+      }
+    }
+
+    function drawRain() {
+      if (raindrops.length === 0) return;
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.strokeStyle = '#ADD8E6';
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      for (const r of raindrops) {
+        ctx.moveTo(r.x, r.y);
+        ctx.lineTo(r.x, r.y - r.length);
+      }
+      ctx.stroke();
+    }
+
+    // ===== Weather: Edge creep =========================================
+    function updateEdgeCreep(dt) {
+      // Each frame, paint a thin new strip just inside the current band.
+      // Erased portions of the band stay erased; the band keeps advancing.
+      const newDist = lastEdgePaint + EDGE_CREEP_SPEED * intensity * dt;
+      if (newDist > lastEdgePaint) {
+        const thickness = (newDist - lastEdgePaint) + 0.6; // small overlap to avoid gaps
+        paintGreyRect(0, lastEdgePaint, W, thickness);          // top
+        paintGreyRect(0, H - newDist, W, thickness);          // bottom
+        paintGreyRect(lastEdgePaint, 0, thickness, H);        // left
+        paintGreyRect(W - newDist, 0, thickness, H);          // right
+        lastEdgePaint = newDist;
+      }
+    }
+
+    // ===== Weather: Wind gusts ========================================
+    function updateWind(dt) {
+      windTimer -= dt;
+      if (windTimer <= 0 && !windGust) {
+        const dir = Math.random() < 0.5 ? 1 : -1;
+        const y = 40 + Math.random() * (H - 80);
+        windGust = {
+          x: dir > 0 ? -30 : W + 30,
+          vx: (480 + intensity * 80) * dir,
+          y: y,
+          width: 14
+        };
+        // Paint a horizontal grey streak across the screen at the gust's y
+        paintGreyRect(0, y - windGust.width / 2, W, windGust.width);
+        // Schedule next gust (more frequent as intensity rises)
+        windTimer = Math.max(3, 9 / intensity) + Math.random() * 3;
+      }
+
+      if (windGust) {
+        windGust.x += windGust.vx * dt;
+        // Push raindrops sideways while gust is active
+        const shift = windGust.vx * dt * 0.5;
+        for (const r of raindrops) {
+          r.x += shift;
+        }
+        if ((windGust.vx > 0 && windGust.x > W + 30) ||
+            (windGust.vx < 0 && windGust.x < -30)) {
+          windGust = null;
+        }
+      }
+    }
+
+    function drawWindGust() {
+      if (!windGust) return;
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(windGust.x, 0);
+      ctx.lineTo(windGust.x, H);
+      ctx.stroke();
+    }
+
+    // ===== UI ==========================================================
+    function drawUI() {
+      ctx.globalCompositeOperation = 'source-over';
+      const warmthPct = Math.max(0, Math.min(1, warmCellCount / totalCells));
+      const warmthPctInt = Math.floor(warmthPct * 100);
+
+      // Score (top-left)
+      ctx.font = 'bold 16px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillText('Score ' + Math.floor(score), 16, 16);
+
+      // Warmth label (top-right)
+      ctx.textAlign = 'right';
+      ctx.fillText('Warmth ' + warmthPctInt + '%', W - 16, 16);
+
+      // Warmth meter - solid white bar at the top
+      const barX = 16, barY = 42, barW = W - 32, barH = 10;
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(barX, barY, barW, barH);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(barX + 1, barY + 1, (barW - 2) * warmthPct, barH - 2);
+    }
+
+    function drawStartText() {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = '#FFFFFF';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = 'bold 28px sans-serif';
+      ctx.fillText("It's cold.", W / 2, H / 2 - 20);
+      ctx.font = '20px sans-serif';
+      ctx.fillText('Touch to warm it up.', W / 2, H / 2 + 20);
+    }
+
+    function drawGameOver() {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = '#FFFFFF';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      ctx.font = 'bold 44px sans-serif';
+      ctx.fillText('Game Over', W / 2, H / 2 - 100);
+
+      ctx.font = '22px sans-serif';
+      ctx.fillText('Final Score: ' + Math.floor(score), W / 2, H / 2 - 30);
+      ctx.fillText('Best: ' + bestScore, W / 2, H / 2 + 10);
+
+      // Again button (solid white rectangle, orange label)
+      const btnW = 180, btnH = 64;
+      const btnX = W / 2 - btnW / 2;
+      const btnY = H / 2 + 60;
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(btnX, btnY, btnW, btnH);
+      ctx.fillStyle = '#FF8C00';
+      ctx.font = 'bold 28px sans-serif';
+      ctx.fillText('Again', W / 2, btnY + btnH / 2);
+    }
+
+    function isTapInAgainButton(x, y) {
+      const btnW = 180, btnH = 64;
+      const btnX = W / 2 - btnW / 2;
+      const btnY = H / 2 + 60;
+      return x >= btnX && x <= btnX + btnW && y >= btnY && y <= btnY + btnH;
+    }
+
+    // ===== Game flow ===================================================
+    function resetState() {
+      score = 0;
+      elapsed = 0;
+      intensity = 1;
+      hasErased = false;
+      raindrops = [];
+      spawnAccumulator = 0;
+      windGust = null;
+      windTimer = 4;
+      lastEdgePaint = 0;
+      lastPos = null;
+      warmthGrid.fill(0);
+      warmCellCount = 0;
+      // Reset destroy layer to fully grey
+      dctx.globalCompositeOperation = 'source-over';
+      dctx.fillStyle = '#333333';
+      dctx.fillRect(0, 0, W, H);
+    }
+
+    function resetToStart() {
+      resetState();
+      state = STATE_START;
+    }
+
+    function startGame() {
+      resetState();
+      state = STATE_PLAYING;
+    }
+
+    function gameOver() {
+      state = STATE_GAMEOVER;
+      // Snap screen to fully solid grey
+      dctx.globalCompositeOperation = 'source-over';
+      dctx.fillStyle = '#333333';
+      dctx.fillRect(0, 0, W, H);
+      warmthGrid.fill(0);
+      warmCellCount = 0;
+      raindrops = [];
+      windGust = null;
+      // Persist best score
+      if (Math.floor(score) > bestScore) {
+        bestScore = Math.floor(score);
+        try { localStorage.setItem('weatherDestroyerBest', String(bestScore)); } catch (e) {}
+      }
+    }
+
+    // ===== Update / Draw ==============================================
+    function update(dt) {
+      elapsed += dt;
+      score += dt * 10;
+      // Intensity ramps every 30 seconds of survival
+      intensity = 1 + Math.floor(elapsed / 30) * 0.5;
+
+      updateRain(dt);
+      updateEdgeCreep(dt);
+      updateWind(dt);
+
+      // Fail state: warmth collapsed to zero after the player has engaged
+      if (hasErased && warmCellCount <= 0) {
+        gameOver();
+      }
+    }
+
+    function draw() {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.clearRect(0, 0, W, H);
+      // Composite the destruction layer (transparent where erased -> orange body shows through)
+      ctx.drawImage(destroyCanvas, 0, 0);
+      // Weather visuals on top of the destruction layer
+      drawRain();
+      drawWindGust();
+      // State-specific overlay
+      if (state === STATE_PLAYING)      drawUI();
+      else if (state === STATE_START)   drawStartText();
+      else if (state === STATE_GAMEOVER) drawGameOver();
+    }
+
+    // ===== Game loop ===================================================
+    function loop(timestamp) {
+      const dt = Math.min(0.05, (timestamp - lastTime) / 1000); // clamp to 50ms
+      lastTime = timestamp;
+
+      if (state === STATE_PLAYING)      update(dt);
+      else if (state === STATE_START)   updateRainOnly(dt);
+
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    // ===== Input =======================================================
+    function getEventPos(e) {
+      const t = (e.touches && e.touches[0]) ||
+                (e.changedTouches && e.changedTouches[0]) ||
+                e;
+      const rect = canvas.getBoundingClientRect();
+      return { x: t.clientX - rect.left, y: t.clientY - rect.top };
+    }
+
+    function handleStart(e) {
+      e.preventDefault();
+      const p = getEventPos(e);
+
+      if (state === STATE_START) {
+        startGame();
+        erase(p.x, p.y, 40);
+        lastPos = p;
+        return;
+      }
+      if (state === STATE_GAMEOVER) {
+        if (isTapInAgainButton(p.x, p.y)) {
+          resetToStart();
+        }
+        return;
+      }
+      // PLAYING
+      erase(p.x, p.y, 40);
+      lastPos = p;
+    }
+
+    function handleMove(e) {
+      e.preventDefault();
+      if (state !== STATE_PLAYING) return;
+      const p = getEventPos(e);
+      if (lastPos) eraseLine(lastPos.x, lastPos.y, p.x, p.y, 40);
+      else         erase(p.x, p.y, 40);
+      lastPos = p;
+    }
+
+    function handleEnd(e) {
+      e.preventDefault();
+      lastPos = null;
+    }
+
+    // Touch (primary on mobile)
+    canvas.addEventListener('touchstart',  handleStart, { passive: false });
+    canvas.addEventListener('touchmove',   handleMove,  { passive: false });
+    canvas.addEventListener('touchend',   handleEnd,   { passive: false });
+    canvas.addEventListener('touchcancel', handleEnd,   { passive: false });
+
+    // Mouse (desktop testing)
+    canvas.addEventListener('mousedown', (e) => { e.preventDefault(); handleStart(e); });
+    canvas.addEventListener('mousemove', (e) => { if (e.buttons === 1) handleMove(e); });
+    canvas.addEventListener('mouseup',   handleEnd);
+    canvas.addEventListener('mouseleave', handleEnd);
+
+    // Resize: re-init everything and return to start state
+    window.addEventListener('resize', () => {
+      setupCanvas();
+      resetToStart();
+    });
+
+    // ===== Boot ========================================================
+    setupCanvas();
+    requestAnimationFrame((t) => {
+      lastTime = t;
+      requestAnimationFrame(loop);
+    });
+  </script>
+</body>
+</html>
