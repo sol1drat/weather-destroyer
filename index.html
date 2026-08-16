@@ -1,575 +1,1990 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#FF8C00">
-<title>Weather Destroyer</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="theme-color" content="#0a0e27" />
+<title>Weather Boss Fight</title>
 <style>
-  * {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body {
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
-    width: 100%;
-    height: 100%;
-    position: fixed;
-    top: 0;
-    left: 0;
-    background: #FF8C00;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    color: #FFFFFF;
-    -webkit-tap-highlight-color: transparent;
-    -webkit-user-select: none;
+    width: 100%; height: 100%; overflow: hidden;
+    background: #0a0e27;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    color: #fff;
     user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
     overscroll-behavior: none;
   }
-  #gameCanvas {
-    margin: 0;
-    padding: 0;
-    width: 100%;
-    height: 100%;
+  #game {
     display: block;
+    position: fixed; top: 0; left: 0;
+    width: 100vw; height: 100vh;
     touch-action: none;
+    background: linear-gradient(180deg, #0a0e27 0%, #1a1f3a 50%, #2d1b4e 100%);
+  }
+
+  /* ---------- UI OVERLAYS ---------- */
+  .overlay {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    z-index: 10;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.35s ease;
+    padding: 24px;
+  }
+  .overlay.visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* ---------- START SCREEN ---------- */
+  #startScreen {
+    background: radial-gradient(ellipse at center, rgba(20,25,60,0.4) 0%, rgba(10,14,39,0.85) 70%);
+    backdrop-filter: blur(2px);
+  }
+  .title {
+    font-size: clamp(38px, 11vw, 84px);
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    text-align: center;
+    line-height: 0.95;
+    background: linear-gradient(135deg, #ffd86b 0%, #ff7e3d 50%, #ff4d6d 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 4px 20px rgba(255, 126, 61, 0.4));
+    animation: titlePulse 3s ease-in-out infinite;
+  }
+  .subtitle {
+    margin-top: 10px;
+    font-size: clamp(13px, 3.5vw, 18px);
+    font-weight: 500;
+    color: #a8b3d9;
+    text-align: center;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  @keyframes titlePulse {
+    0%, 100% { transform: scale(1); filter: drop-shadow(0 4px 20px rgba(255, 126, 61, 0.4)); }
+    50% { transform: scale(1.03); filter: drop-shadow(0 6px 30px rgba(255, 126, 61, 0.7)); }
+  }
+  .startBtn {
+    margin-top: 40px;
+    padding: 18px 56px;
+    font-size: clamp(18px, 5vw, 22px);
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #0a0e27;
+    background: linear-gradient(135deg, #ffd86b 0%, #ff9a3d 100%);
+    border: none;
+    border-radius: 999px;
+    cursor: pointer;
+    box-shadow: 0 8px 30px rgba(255, 154, 61, 0.5), 0 0 0 0 rgba(255, 154, 61, 0.6);
+    transition: transform 0.15s, box-shadow 0.3s;
+    animation: btnPulse 2s ease-in-out infinite;
+  }
+  .startBtn:active { transform: scale(0.94); }
+  @keyframes btnPulse {
+    0%, 100% { box-shadow: 0 8px 30px rgba(255, 154, 61, 0.5), 0 0 0 0 rgba(255, 154, 61, 0.6); }
+    50% { box-shadow: 0 8px 30px rgba(255, 154, 61, 0.7), 0 0 0 18px rgba(255, 154, 61, 0); }
+  }
+  .hintText {
+    margin-top: 28px;
+    font-size: 13px;
+    color: #6b7299;
+    text-align: center;
+    line-height: 1.6;
+    max-width: 320px;
+  }
+  .hintText b { color: #ffd86b; font-weight: 700; }
+
+  /* ---------- HUD ---------- */
+  #hud {
+    position: fixed; top: 0; left: 0; right: 0;
+    padding: 12px 16px;
+    padding-top: max(12px, env(safe-area-inset-top));
+    z-index: 5;
+    pointer-events: none;
+    display: flex; flex-direction: column;
+    gap: 8px;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  #hud.visible { opacity: 1; }
+  .hudTop {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    gap: 12px;
+  }
+  .lives {
+    display: flex; gap: 6px;
+  }
+  .life {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #fff5b0, #ffd86b 50%, #ff9a3d 100%);
+    box-shadow: 0 0 12px rgba(255, 216, 107, 0.8);
+    transition: transform 0.2s, opacity 0.2s;
+  }
+  .life.lost {
+    opacity: 0.15;
+    transform: scale(0.7);
+    background: #444;
+    box-shadow: none;
+  }
+  .scoreBlock {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .scoreVal {
+    font-size: 28px;
+    font-weight: 900;
+    color: #fff;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    line-height: 1;
+  }
+  .scoreLabel {
+    font-size: 10px;
+    color: #a8b3d9;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-top: 2px;
+  }
+  .levelTag {
+    display: inline-block;
+    margin-top: 6px;
+    padding: 3px 10px;
+    background: rgba(255, 126, 61, 0.2);
+    border: 1px solid rgba(255, 154, 61, 0.5);
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #ffd86b;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  /* Boss health bar */
+  .bossBar {
+    margin-top: 4px;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .bossBar.visible { opacity: 1; }
+  .bossName {
+    font-size: 12px;
+    font-weight: 800;
+    text-align: center;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+  }
+  .bossBarBg {
+    height: 10px;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+  .bossBarFill {
+    height: 100%;
+    background: linear-gradient(90deg, #ff4d6d 0%, #ff7e3d 50%, #ffd86b 100%);
+    border-radius: 6px;
+    transition: width 0.15s ease-out;
+    box-shadow: 0 0 12px rgba(255, 126, 61, 0.6);
+  }
+
+  /* Power-up icons (active) */
+  .powerupStrip {
+    position: fixed;
+    bottom: max(16px, env(safe-area-inset-bottom));
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex; gap: 8px;
+    z-index: 5;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .powerupStrip.visible { opacity: 1; }
+  .puChip {
+    padding: 6px 12px;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,216,107,0.4);
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #ffd86b;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 2px 12px rgba(0,0,0,0.4);
+  }
+
+  /* ---------- POWERUP SELECT ---------- */
+  #powerupScreen {
+    background: radial-gradient(ellipse at center, rgba(255, 216, 107, 0.15) 0%, rgba(10, 14, 39, 0.92) 70%);
+    backdrop-filter: blur(6px);
+  }
+  .puTitle {
+    font-size: clamp(24px, 6vw, 38px);
+    font-weight: 900;
+    text-align: center;
+    background: linear-gradient(135deg, #ffd86b 0%, #ff7e3d 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 6px;
+  }
+  .puSub {
+    font-size: 13px;
+    color: #a8b3d9;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 28px;
+  }
+  .puCards {
+    display: flex; flex-direction: column;
+    gap: 14px;
+    width: 100%;
+    max-width: 360px;
+  }
+  .puCard {
+    padding: 18px 22px;
+    background: linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%);
+    border: 1.5px solid rgba(255, 216, 107, 0.3);
+    border-radius: 16px;
+    cursor: pointer;
+    display: flex; align-items: center; gap: 16px;
+    transition: transform 0.15s, border-color 0.2s, background 0.2s;
+    backdrop-filter: blur(8px);
+  }
+  .puCard:active {
+    transform: scale(0.97);
+    border-color: #ffd86b;
+    background: linear-gradient(135deg, rgba(255, 216, 107, 0.15) 0%, rgba(255, 126, 61, 0.08) 100%);
+  }
+  .puIcon {
+    width: 48px; height: 48px;
+    flex-shrink: 0;
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px;
+    background: linear-gradient(135deg, #ffd86b 0%, #ff7e3d 100%);
+    color: #0a0e27;
+    box-shadow: 0 4px 16px rgba(255, 154, 61, 0.4);
+  }
+  .puInfo { flex: 1; }
+  .puName {
+    font-size: 17px;
+    font-weight: 800;
+    color: #fff;
+    margin-bottom: 2px;
+  }
+  .puDesc {
+    font-size: 12px;
+    color: #a8b3d9;
+    line-height: 1.4;
+  }
+
+  /* ---------- GAME OVER ---------- */
+  #gameOverScreen {
+    background: radial-gradient(ellipse at center, rgba(255, 77, 109, 0.18) 0%, rgba(10, 14, 39, 0.94) 70%);
+    backdrop-filter: blur(6px);
+  }
+  .goTitle {
+    font-size: clamp(38px, 10vw, 72px);
+    font-weight: 900;
+    text-align: center;
+    background: linear-gradient(135deg, #ff4d6d 0%, #ff7e3d 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 4px 20px rgba(255, 77, 109, 0.4));
+    margin-bottom: 24px;
+  }
+  .goStats {
+    display: flex; gap: 32px;
+    margin-bottom: 8px;
+  }
+  .goStat {
+    text-align: center;
+  }
+  .goStatVal {
+    font-size: clamp(34px, 9vw, 56px);
+    font-weight: 900;
+    color: #fff;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .goStatLabel {
+    font-size: 11px;
+    color: #a8b3d9;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+  .goBest {
+    margin: 16px 0 32px;
+    font-size: 13px;
+    color: #ffd86b;
+    letter-spacing: 0.05em;
+  }
+  .goBest.newRecord {
+    color: #ffd86b;
+    font-weight: 800;
+    animation: recordFlash 0.8s ease-in-out infinite alternate;
+  }
+  @keyframes recordFlash {
+    from { text-shadow: 0 0 8px rgba(255, 216, 107, 0.4); }
+    to { text-shadow: 0 0 20px rgba(255, 216, 107, 0.9); }
+  }
+  .restartBtn {
+    padding: 16px 48px;
+    font-size: clamp(16px, 4.5vw, 20px);
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #0a0e27;
+    background: linear-gradient(135deg, #ffd86b 0%, #ff9a3d 100%);
+    border: none;
+    border-radius: 999px;
+    cursor: pointer;
+    box-shadow: 0 6px 24px rgba(255, 154, 61, 0.5);
+    transition: transform 0.15s;
+  }
+  .restartBtn:active { transform: scale(0.94); }
+
+  /* Pause indicator */
+  #pausedTag {
+    position: fixed; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 24px; font-weight: 900;
+    color: #fff;
+    letter-spacing: 0.3em;
+    z-index: 20;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+  }
+  #pausedTag.visible { opacity: 1; }
+
+  @media (max-height: 500px) {
+    .puCards { max-width: 480px; }
+    .puCard { padding: 12px 16px; }
+    .puIcon { width: 40px; height: 40px; font-size: 20px; }
   }
 </style>
 </head>
 <body>
-  <canvas id="gameCanvas"></canvas>
-  <script>
-    'use strict';
+  <canvas id="game"></canvas>
 
-    // ====================================================================
-    // Weather Destroyer - a minimalist tug-of-war arcade game
-    // Background (Warmth) is solid orange (#FF8C00) on the body.
-    // An off-screen destruction canvas holds the grey (#333333) "Weather"
-    // overlay. The player erases it with destination-out to reveal warmth.
-    // Weather fights back via rain, edge creep and wind gusts.
-    // ====================================================================
+  <!-- HUD -->
+  <div id="hud">
+    <div class="hudTop">
+      <div class="lives" id="lives"></div>
+      <div class="scoreBlock">
+        <div class="scoreVal" id="scoreVal">0</div>
+        <div class="scoreLabel">Score</div>
+        <span class="levelTag" id="levelTag">Lv. 1</span>
+      </div>
+    </div>
+    <div class="bossBar" id="bossBar">
+      <div class="bossName" id="bossName">RAIN CLOUD</div>
+      <div class="bossBarBg"><div class="bossBarFill" id="bossBarFill" style="width:100%"></div></div>
+    </div>
+  </div>
 
-    // ===== Visible canvas (only one in the DOM) =========================
-    const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d');
+  <!-- Active power-up chips -->
+  <div class="powerupStrip" id="powerupStrip"></div>
 
-    // Off-screen destruction layer (buffer, not in DOM).
-    // Persistent across frames so erased areas stay erased.
-    const destroyCanvas = document.createElement('canvas');
-    const dctx = destroyCanvas.getContext('2d');
+  <!-- START SCREEN -->
+  <div class="overlay visible" id="startScreen">
+    <div class="title">WEATHER<br>BOSS FIGHT</div>
+    <div class="subtitle">Endless Arcade Roguelite</div>
+    <button class="startBtn" id="startBtn">Play</button>
+    <div class="hintText">
+      Drag <b>left / right</b> to move the Sun Core. It auto-fires.<br>
+      Dodge hail, lightning, and rain. Defeat each boss to grow stronger.
+    </div>
+  </div>
 
-    // ===== Geometry / warmth grid =======================================
-    let W = 0, H = 0;
-    const CELL = 16;                       // grid cell size for warmth tracking
-    let cols = 1, rows = 1, totalCells = 1;
-    let warmthGrid = new Float32Array(1); // 1 = warm (orange visible), 0 = cold (grey)
-    let warmCellCount = 0;                 // running count, avoids full-grid scans
+  <!-- POWERUP SELECT -->
+  <div class="overlay" id="powerupScreen">
+    <div class="puTitle">Boss Defeated!</div>
+    <div class="puSub">Choose a Power-Up</div>
+    <div class="puCards" id="puCards"></div>
+  </div>
 
-    function setupCanvas() {
-      W = window.innerWidth;
-      H = window.innerHeight;
-      canvas.width = W;
-      canvas.height = H;
-      destroyCanvas.width = W;
-      destroyCanvas.height = H;
-      cols = Math.ceil(W / CELL) + 1;
-      rows = Math.ceil(H / CELL) + 1;
-      totalCells = cols * rows;
-      warmthGrid = new Float32Array(cols * rows);
-      warmCellCount = 0;
-      // Paint destroy layer fully grey (start / restart baseline)
-      dctx.globalCompositeOperation = 'source-over';
-      dctx.fillStyle = '#333333';
-      dctx.fillRect(0, 0, W, H);
+  <!-- GAME OVER -->
+  <div class="overlay" id="gameOverScreen">
+    <div class="goTitle">GAME OVER</div>
+    <div class="goStats">
+      <div class="goStat">
+        <div class="goStatVal" id="goScore">0</div>
+        <div class="goStatLabel">Score</div>
+      </div>
+      <div class="goStat">
+        <div class="goStatVal" id="goLevel">1</div>
+        <div class="goStatLabel">Boss Level</div>
+      </div>
+    </div>
+    <div class="goBest" id="goBest">Best: 0 · Lv. 0</div>
+    <button class="restartBtn" id="restartBtn">Try Again</button>
+  </div>
+
+  <div id="pausedTag">PAUSED</div>
+
+<script>
+"use strict";
+
+/* ============================================================
+   WEATHER BOSS FIGHT - single-file HTML5 arcade roguelite
+   ============================================================ */
+
+/* ---------- Utilities ---------- */
+const rand = (a, b) => a + Math.random() * (b - a);
+const randInt = (a, b) => Math.floor(rand(a, b + 1));
+const clamp = (v, mn, mx) => Math.max(mn, Math.min(mx, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const TAU = Math.PI * 2;
+
+/* ---------- Canvas setup with HiDPI ---------- */
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d', { alpha: false });
+
+let W = window.innerWidth, H = window.innerHeight;
+let DPR = Math.min(window.devicePixelRatio || 1, 2.5);
+
+function resize() {
+  W = window.innerWidth;
+  H = window.innerHeight;
+  DPR = Math.min(window.devicePixelRatio || 1, 2.5);
+  canvas.width = W * DPR;
+  canvas.height = H * DPR;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', () => setTimeout(resize, 200));
+resize();
+
+/* ---------- Game state ---------- */
+const STATE = { START: 'start', PLAYING: 'playing', POWERUP: 'powerup', GAMEOVER: 'gameover' };
+
+const G = {
+  state: STATE.START,
+  score: 0,
+  level: 1,
+  lives: 3,
+  bossKills: 0,
+  highScore: 0,
+  highLevel: 0,
+  shakeAmt: 0,
+  hitstop: 0,            // frames to freeze
+  flashAlpha: 0,
+  flashColor: '#fff',
+  sunBurstT: 0,          // sunny transition timer
+  bgTintR: 10, bgTintG: 14, bgTintB: 39,  // current bg tint
+  ambientRain: 0,        // gentle ambient rain density
+  time: 0,
+  paused: false,
+};
+
+/* Load high score */
+try {
+  G.highScore = parseInt(localStorage.getItem('wbf_highScore') || '0', 10) || 0;
+  G.highLevel = parseInt(localStorage.getItem('wbf_highLevel') || '0', 10) || 0;
+} catch (e) {}
+
+/* ---------- Audio (procedural) ---------- */
+const Audio = {
+  ctx: null,
+  master: null,
+  enabled: false,
+  rainNoise: null,
+  rainGain: null,
+  rainSource: null,
+
+  init() {
+    if (this.ctx) {
+      if (this.ctx.state === 'suspended') this.ctx.resume();
+      return;
+    }
+    try {
+      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      this.master = this.ctx.createGain();
+      this.master.gain.value = 0.45;
+      this.master.connect(this.ctx.destination);
+      this.enabled = true;
+    } catch (e) { this.enabled = false; }
+  },
+
+  shoot() {
+    if (!this.enabled) return;
+    const t = this.ctx.currentTime;
+    const o = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(900, t);
+    o.frequency.exponentialRampToValueAtTime(420, t + 0.08);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.12, t + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.1);
+    o.connect(g); g.connect(this.master);
+    o.start(t); o.stop(t + 0.12);
+  },
+
+  hit() {
+    if (!this.enabled) return;
+    const t = this.ctx.currentTime;
+    const o = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    o.type = 'square';
+    o.frequency.setValueAtTime(180, t);
+    o.frequency.exponentialRampToValueAtTime(60, t + 0.18);
+    g.gain.setValueAtTime(0.18, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+    o.connect(g); g.connect(this.master);
+    o.start(t); o.stop(t + 0.22);
+  },
+
+  lightning() {
+    if (!this.enabled) return;
+    const t = this.ctx.currentTime;
+    // High zap
+    const o = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(1400, t);
+    o.frequency.exponentialRampToValueAtTime(120, t + 0.4);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.3, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.45);
+    o.connect(g); g.connect(this.master);
+    o.start(t); o.stop(t + 0.5);
+    // Noise crash
+    this.noiseBurst(0.3, 0.15, 800);
+  },
+
+  hail() {
+    if (!this.enabled) return;
+    this.noiseBurst(0.08, 0.08, 2200);
+  },
+
+  bossDie() {
+    if (!this.enabled) return;
+    const t = this.ctx.currentTime;
+    // Triumphant chord
+    [523, 659, 784, 1047].forEach((f, i) => {
+      const o = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      o.type = 'triangle';
+      o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t + i * 0.05);
+      g.gain.exponentialRampToValueAtTime(0.16, t + i * 0.05 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + i * 0.05 + 0.6);
+      o.connect(g); g.connect(this.master);
+      o.start(t + i * 0.05); o.stop(t + i * 0.05 + 0.65);
+    });
+  },
+
+  playerHurt() {
+    if (!this.enabled) return;
+    const t = this.ctx.currentTime;
+    const o = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(440, t);
+    o.frequency.exponentialRampToValueAtTime(80, t + 0.3);
+    g.gain.setValueAtTime(0.25, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
+    o.connect(g); g.connect(this.master);
+    o.start(t); o.stop(t + 0.4);
+  },
+
+  powerup() {
+    if (!this.enabled) return;
+    const t = this.ctx.currentTime;
+    [440, 660, 880].forEach((f, i) => {
+      const o = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      o.type = 'sine';
+      o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t + i * 0.08);
+      g.gain.exponentialRampToValueAtTime(0.14, t + i * 0.08 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + i * 0.08 + 0.3);
+      o.connect(g); g.connect(this.master);
+      o.start(t + i * 0.08); o.stop(t + i * 0.08 + 0.35);
+    });
+  },
+
+  noiseBurst(dur, vol, freq) {
+    if (!this.enabled) return;
+    const t = this.ctx.currentTime;
+    const len = Math.floor(this.ctx.sampleRate * dur);
+    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    const filt = this.ctx.createBiquadFilter();
+    filt.type = 'bandpass';
+    filt.frequency.value = freq;
+    filt.Q.value = 1;
+    const g = this.ctx.createGain();
+    g.gain.value = vol;
+    src.connect(filt); filt.connect(g); g.connect(this.master);
+    src.start(t);
+  },
+
+  startRain() {
+    if (!this.enabled || this.rainSource) return;
+    const len = Math.floor(this.ctx.sampleRate * 2);
+    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * 0.5;
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    const filt = this.ctx.createBiquadFilter();
+    filt.type = 'lowpass';
+    filt.frequency.value = 1200;
+    const g = this.ctx.createGain();
+    g.gain.value = 0;
+    src.connect(filt); filt.connect(g); g.connect(this.master);
+    src.start();
+    this.rainSource = src;
+    this.rainGain = g;
+  },
+
+  setRainVol(v) {
+    if (!this.rainGain) return;
+    this.rainGain.gain.setTargetAtTime(v, this.ctx.currentTime, 0.3);
+  },
+
+  stopRain() {
+    if (!this.rainSource) return;
+    this.setRainVol(0);
+    const src = this.rainSource;
+    setTimeout(() => { try { src.stop(); } catch(e){} }, 500);
+    this.rainSource = null;
+    this.rainGain = null;
+  },
+
+  thunder() {
+    if (!this.enabled) return;
+    const t = this.ctx.currentTime;
+    const len = Math.floor(this.ctx.sampleRate * 1.2);
+    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) {
+      const env = Math.exp(-i / len * 4);
+      data[i] = (Math.random() * 2 - 1) * env;
+    }
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    const filt = this.ctx.createBiquadFilter();
+    filt.type = 'lowpass';
+    filt.frequency.value = 200;
+    const g = this.ctx.createGain();
+    g.gain.value = 0.35;
+    src.connect(filt); filt.connect(g); g.connect(this.master);
+    src.start(t);
+  }
+};
+
+/* ---------- Particle pool ---------- */
+const POOL_SIZE = 600;
+const particles = [];
+for (let i = 0; i < POOL_SIZE; i++) {
+  particles.push({ active: false, x:0, y:0, vx:0, vy:0, life:0, maxLife:1, size:1, color:'#fff', grav:0, fade:true, glow:false, spin:0, rot:0, shape:'circle' });
+}
+function spawnP(opts) {
+  for (let i = 0; i < POOL_SIZE; i++) {
+    const p = particles[i];
+    if (!p.active) {
+      p.active = true;
+      p.x = opts.x; p.y = opts.y;
+      p.vx = opts.vx || 0; p.vy = opts.vy || 0;
+      p.life = opts.life || 1; p.maxLife = p.life;
+      p.size = opts.size || 3;
+      p.color = opts.color || '#fff';
+      p.grav = opts.grav || 0;
+      p.fade = opts.fade !== false;
+      p.glow = opts.glow || false;
+      p.spin = opts.spin || 0;
+      p.rot = opts.rot || 0;
+      p.shape = opts.shape || 'circle';
+      return p;
+    }
+  }
+  return null;
+}
+function updateParticles(dt) {
+  for (let i = 0; i < POOL_SIZE; i++) {
+    const p = particles[i];
+    if (!p.active) continue;
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.vy += p.grav * dt;
+    p.rot += p.spin * dt;
+    p.life -= dt / 60;
+    if (p.life <= 0) p.active = false;
+  }
+}
+function drawParticles() {
+  for (let i = 0; i < POOL_SIZE; i++) {
+    const p = particles[i];
+    if (!p.active) continue;
+    const a = p.fade ? clamp(p.life / p.maxLife, 0, 1) : 1;
+    ctx.globalAlpha = a;
+    if (p.glow) {
+      ctx.shadowBlur = 12;
+      ctx.shadowColor = p.color;
+    } else {
+      ctx.shadowBlur = 0;
+    }
+    ctx.fillStyle = p.color;
+    if (p.shape === 'square') {
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.fillRect(-p.size, -p.size, p.size * 2, p.size * 2);
+      ctx.restore();
+    } else {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, TAU);
+      ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
+  ctx.shadowBlur = 0;
+}
+
+/* ---------- Input ---------- */
+const input = { x: W / 2, y: H - 100, active: false };
+
+function setInputPos(clientX, clientY) {
+  const r = canvas.getBoundingClientRect();
+  input.x = clientX - r.left;
+  input.y = clientY - r.top;
+  input.active = true;
+}
+
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  Audio.init();
+  const t = e.touches[0];
+  setInputPos(t.clientX, t.clientY);
+}, { passive: false });
+canvas.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  const t = e.touches[0];
+  setInputPos(t.clientX, t.clientY);
+}, { passive: false });
+canvas.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  input.active = false;
+}, { passive: false });
+
+canvas.addEventListener('mousedown', (e) => {
+  Audio.init();
+  setInputPos(e.clientX, e.clientY);
+});
+canvas.addEventListener('mousemove', (e) => {
+  if (input.active) setInputPos(e.clientX, e.clientY);
+});
+canvas.addEventListener('mouseup', () => { input.active = false; });
+canvas.addEventListener('mouseleave', () => { input.active = false; });
+
+/* Pause when tab hidden */
+document.addEventListener('visibilitychange', () => {
+  G.paused = document.hidden;
+  document.getElementById('pausedTag').classList.toggle('visible', G.paused);
+});
+
+/* ---------- Player (Sun Core) ---------- */
+const player = {
+  x: W / 2, y: 0,
+  targetX: W / 2,
+  r: 24,
+  fireRate: 220,         // ms between shots
+  lastFire: 0,
+  invuln: 0,             // iframes after hit
+  shield: false,
+  shieldHits: 1,
+  overcharge: 0,         // seconds remaining
+  spread: false,
+  doubleDamage: 0,
+  pulseT: 0,
+  rayAngle: 0,
+
+  reset() {
+    this.x = W / 2; this.targetX = W / 2;
+    this.y = H - 90;
+    this.r = 24;
+    this.fireRate = 220;
+    this.lastFire = 0;
+    this.invuln = 0;
+    this.shield = false; this.shieldHits = 1;
+    this.overcharge = 0;
+    this.spread = false;
+    this.doubleDamage = 0;
+  },
+
+  update(dt, now) {
+    this.y = H - 90;
+    // Track input X
+    if (input.active) this.targetX = input.x;
+    this.targetX = clamp(this.targetX, this.r, W - this.r);
+    // Smooth follow
+    this.x = lerp(this.x, this.targetX, 0.25);
+
+    this.pulseT += dt / 60;
+    this.rayAngle += dt * 0.02;
+
+    // Auto fire
+    const rate = this.overcharge > 0 ? this.fireRate * 0.35 : this.fireRate;
+    if (now - this.lastFire >= rate) {
+      this.fire();
+      this.lastFire = now;
     }
 
-    // ===== Game state ==================================================
-    const STATE_START    = 'START';
-    const STATE_PLAYING  = 'PLAYING';
-    const STATE_GAMEOVER = 'GAMEOVER';
+    if (this.invuln > 0) this.invuln -= dt;
+    if (this.overcharge > 0) this.overcharge -= dt / 60;
+    if (this.doubleDamage > 0) this.doubleDamage -= dt / 60;
 
-    let state        = STATE_START;
-    let score        = 0;
-    let bestScore    = parseInt(localStorage.getItem('weatherDestroyerBest') || '0', 10);
-    let elapsed      = 0;          // seconds survived
-    let intensity    = 1;           // scales every 30s
-    let hasErased    = false;       // prevent instant game-over before first erase
-
-    let raindrops         = [];
-    let spawnAccumulator  = 0;
-    const MAX_RAIN        = 220;
-
-    let windGust  = null;
-    let windTimer = 4;
-
-    let lastEdgePaint        = 0;
-    const EDGE_CREEP_SPEED   = 1.5; // px per second (base)
-
-    let lastPos  = null;
-    let lastTime = 0;
-
-    // ===== Grid helpers (mathematical warmth tracking) =================
-    function markWarm(x, y, r) {
-      const cx = Math.floor(x / CELL);
-      const cy = Math.floor(y / CELL);
-      const cr = Math.ceil(r / CELL);
-      const cr2 = cr * cr;
-      for (let dy = -cr; dy <= cr; dy++) {
-        for (let dx = -cr; dx <= cr; dx++) {
-          const gx = cx + dx, gy = cy + dy;
-          if (gx < 0 || gx >= cols || gy < 0 || gy >= rows) continue;
-          if (dx * dx + dy * dy <= cr2) {
-            const idx = gy * cols + gx;
-            if (warmthGrid[idx] < 0.5) {
-              warmthGrid[idx] = 1;
-              warmCellCount++;
-            }
-          }
-        }
-      }
-    }
-
-    function markCold(x, y, r) {
-      const cx = Math.floor(x / CELL);
-      const cy = Math.floor(y / CELL);
-      const cr = Math.ceil(r / CELL);
-      const cr2 = cr * cr;
-      for (let dy = -cr; dy <= cr; dy++) {
-        for (let dx = -cr; dx <= cr; dx++) {
-          const gx = cx + dx, gy = cy + dy;
-          if (gx < 0 || gx >= cols || gy < 0 || gy >= rows) continue;
-          if (dx * dx + dy * dy <= cr2) {
-            const idx = gy * cols + gx;
-            if (warmthGrid[idx] > 0.5) {
-              warmthGrid[idx] = 0;
-              warmCellCount--;
-            }
-          }
-        }
-      }
-    }
-
-    function markColdRect(x1, y1, x2, y2) {
-      const gx1 = Math.max(0, Math.floor(x1 / CELL));
-      const gx2 = Math.min(cols - 1, Math.floor(x2 / CELL));
-      const gy1 = Math.max(0, Math.floor(y1 / CELL));
-      const gy2 = Math.min(rows - 1, Math.floor(y2 / CELL));
-      for (let gy = gy1; gy <= gy2; gy++) {
-        for (let gx = gx1; gx <= gx2; gx++) {
-          const idx = gy * cols + gx;
-          if (warmthGrid[idx] > 0.5) {
-            warmthGrid[idx] = 0;
-            warmCellCount--;
-          }
-        }
-      }
-    }
-
-    // ===== Erase / paint primitives =====================================
-    function erase(x, y, r) {
-      dctx.globalCompositeOperation = 'destination-out';
-      dctx.fillStyle = '#000000';
-      dctx.beginPath();
-      dctx.arc(x, y, r, 0, Math.PI * 2);
-      dctx.fill();
-      markWarm(x, y, r);
-      hasErased = true;
-    }
-
-    function eraseLine(x1, y1, x2, y2, r) {
-      dctx.globalCompositeOperation = 'destination-out';
-      dctx.strokeStyle = '#000000';
-      dctx.lineWidth = r * 2;
-      dctx.lineCap = 'round';
-      dctx.lineJoin = 'round';
-      dctx.beginPath();
-      dctx.moveTo(x1, y1);
-      dctx.lineTo(x2, y2);
-      dctx.stroke();
-      // Sample the segment so the grid tracks the actual erased path
-      const dx = x2 - x1, dy = y2 - y1;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      const steps = Math.max(1, Math.ceil(dist / 6));
-      for (let i = 0; i <= steps; i++) {
-        const t = i / steps;
-        markWarm(x1 + dx * t, y1 + dy * t, r);
-      }
-      hasErased = true;
-    }
-
-    function paintGreyDot(x, y, r) {
-      dctx.globalCompositeOperation = 'source-over';
-      dctx.fillStyle = '#333333';
-      dctx.beginPath();
-      dctx.arc(x, y, r, 0, Math.PI * 2);
-      dctx.fill();
-      markCold(x, y, r);
-    }
-
-    function paintGreyRect(x, y, w, h) {
-      dctx.globalCompositeOperation = 'source-over';
-      dctx.fillStyle = '#333333';
-      dctx.fillRect(x, y, w, h);
-      markColdRect(x, y, x + w, y + h);
-    }
-
-    // ===== Weather: Rain ===============================================
-    function spawnRaindrop() {
-      if (raindrops.length >= MAX_RAIN) return;
-      raindrops.push({
-        x: Math.random() * W,
-        y: -20 - Math.random() * 40,
-        vy: 220 + Math.random() * 80 + intensity * 40,
-        vx: 0,
-        length: 12 + Math.random() * 8
+    // Ambient sun particles
+    if (Math.random() < 0.4) {
+      spawnP({
+        x: this.x + rand(-this.r, this.r),
+        y: this.y + rand(-this.r, this.r),
+        vx: rand(-0.3, 0.3), vy: rand(-1.5, -0.5),
+        life: 0.6, size: rand(1, 2.5),
+        color: '#ffd86b', glow: true, grav: -0.02
       });
     }
+  },
 
-    function updateRain(dt) {
-      const spawnRate = 30 + intensity * 10;
-      spawnAccumulator += spawnRate * dt;
-      while (spawnAccumulator >= 1) {
-        spawnRaindrop();
-        spawnAccumulator -= 1;
+  fire() {
+    Audio.shoot();
+    const dmg = this.doubleDamage > 0 ? 2 : 1;
+    if (this.spread) {
+      projectiles.push(makeBeam(this.x, this.y - this.r, -0.18, dmg));
+      projectiles.push(makeBeam(this.x, this.y - this.r, 0, dmg));
+      projectiles.push(makeBeam(this.x, this.y - this.r, 0.18, dmg));
+    } else {
+      projectiles.push(makeBeam(this.x, this.y - this.r, 0, dmg));
+    }
+    // Muzzle particles
+    for (let i = 0; i < 4; i++) {
+      spawnP({
+        x: this.x, y: this.y - this.r,
+        vx: rand(-1, 1), vy: rand(-3, -1),
+        life: 0.3, size: rand(2, 4),
+        color: '#ffd86b', glow: true
+      });
+    }
+  },
+
+  draw() {
+    const flicker = this.invuln > 0 && Math.floor(this.invuln / 4) % 2 === 0;
+    if (flicker) { ctx.globalAlpha = 0.4; }
+
+    // Outer glow rays
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.rayAngle);
+    for (let i = 0; i < 8; i++) {
+      ctx.rotate(TAU / 8);
+      const grad = ctx.createLinearGradient(0, 0, 0, -this.r * 2.2);
+      grad.addColorStop(0, 'rgba(255, 216, 107, 0.6)');
+      grad.addColorStop(1, 'rgba(255, 216, 107, 0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.moveTo(-3, -this.r * 0.6);
+      ctx.lineTo(3, -this.r * 0.6);
+      ctx.lineTo(0, -this.r * 2.2);
+      ctx.fill();
+    }
+    ctx.restore();
+
+    // Outer halo
+    const haloR = this.r * 2.5 + Math.sin(this.pulseT * 4) * 3;
+    const halo = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, haloR);
+    halo.addColorStop(0, 'rgba(255, 216, 107, 0.6)');
+    halo.addColorStop(0.5, 'rgba(255, 154, 61, 0.25)');
+    halo.addColorStop(1, 'rgba(255, 154, 61, 0)');
+    ctx.fillStyle = halo;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, haloR, 0, TAU);
+    ctx.fill();
+
+    // Core
+    const core = ctx.createRadialGradient(this.x - this.r * 0.3, this.y - this.r * 0.3, 2, this.x, this.y, this.r);
+    core.addColorStop(0, '#fff5b0');
+    core.addColorStop(0.5, '#ffd86b');
+    core.addColorStop(1, '#ff7e3d');
+    ctx.fillStyle = core;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.r, 0, TAU);
+    ctx.fill();
+
+    // Shield
+    if (this.shield) {
+      ctx.strokeStyle = 'rgba(120, 200, 255, 0.7)';
+      ctx.lineWidth = 3;
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = '#78c8ff';
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.r * 1.6 + Math.sin(this.pulseT * 3) * 2, 0, TAU);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+
+    ctx.globalAlpha = 1;
+  },
+
+  hurt() {
+    if (this.invuln > 0) return false;
+    if (this.shield && this.shieldHits > 0) {
+      this.shieldHits--;
+      if (this.shieldHits <= 0) this.shield = false;
+      this.invuln = 60;
+      shake(8);
+      flash('#78c8ff', 0.4);
+      Audio.hit();
+      // Shield break particles
+      for (let i = 0; i < 20; i++) {
+        const a = rand(0, TAU);
+        spawnP({
+          x: this.x + Math.cos(a) * this.r * 1.6,
+          y: this.y + Math.sin(a) * this.r * 1.6,
+          vx: Math.cos(a) * 3, vy: Math.sin(a) * 3,
+          life: 0.5, size: rand(2, 4),
+          color: '#78c8ff', glow: true
+        });
       }
+      return false;
+    }
+    this.invuln = 90;
+    G.lives--;
+    shake(18);
+    flash('#ff4d6d', 0.6);
+    Audio.playerHurt();
+    G.hitstop = 6;
+    // Explosion
+    for (let i = 0; i < 30; i++) {
+      const a = rand(0, TAU);
+      const s = rand(2, 6);
+      spawnP({
+        x: this.x, y: this.y,
+        vx: Math.cos(a) * s, vy: Math.sin(a) * s,
+        life: rand(0.5, 1), size: rand(2, 5),
+        color: i % 2 ? '#ffd86b' : '#ff7e3d',
+        glow: true, grav: 0.05
+      });
+    }
+    updateLivesUI();
+    if (G.lives <= 0) {
+      gameOver();
+    }
+    return true;
+  }
+};
 
-      for (let i = raindrops.length - 1; i >= 0; i--) {
-        const r = raindrops[i];
-        r.x += r.vx * dt;
-        r.y += r.vy * dt;
+/* ---------- Projectiles (Sunbeams) ---------- */
+const projectiles = [];
+function makeBeam(x, y, angleOff, dmg) {
+  const speed = 14;
+  return {
+    x, y,
+    vx: Math.sin(angleOff) * speed,
+    vy: -Math.cos(angleOff) * speed,
+    r: 5,
+    dmg: dmg || 1,
+    life: 3,
+    slowed: 0,
+    trail: []
+  };
+}
+function updateProjectiles(dt) {
+  for (let i = projectiles.length - 1; i >= 0; i--) {
+    const p = projectiles[i];
+    // Check rain columns for slow
+    let slowFactor = 1;
+    for (const r of rainColumns) {
+      if (r.active && p.x > r.x - r.w / 2 && p.x < r.x + r.w / 2 && p.y < r.y + r.h) {
+        slowFactor = 0.35;
+        break;
+      }
+    }
+    p.trail.push({ x: p.x, y: p.y });
+    if (p.trail.length > 6) p.trail.shift();
+    p.x += p.vx * dt * slowFactor;
+    p.y += p.vy * dt * slowFactor;
+    p.life -= dt / 60;
+    if (p.y < -20 || p.life <= 0) projectiles.splice(i, 1);
+  }
+}
+function drawProjectiles() {
+  for (const p of projectiles) {
+    // Trail
+    for (let i = 0; i < p.trail.length; i++) {
+      const t = p.trail[i];
+      const a = (i + 1) / p.trail.length * 0.5;
+      ctx.globalAlpha = a;
+      ctx.fillStyle = '#ffd86b';
+      ctx.beginPath();
+      ctx.arc(t.x, t.y, p.r * (i / p.trail.length), 0, TAU);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    // Glow
+    ctx.shadowBlur = 14;
+    ctx.shadowColor = '#ffd86b';
+    const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 1.5);
+    g.addColorStop(0, '#fff5b0');
+    g.addColorStop(0.6, '#ffd86b');
+    g.addColorStop(1, 'rgba(255, 216, 107, 0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r * 1.5, 0, TAU);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+}
 
-        if (r.y > H + 20 || r.x < -30 || r.x > W + 30) {
-          raindrops.splice(i, 1);
-          continue;
-        }
+/* ---------- Boss (Cloud) ---------- */
+const WEATHER_TYPES = ['rain', 'hail', 'lightning', 'blizzard', 'tornado'];
+const BOSS_NAMES = {
+  rain: 'RAIN CLOUD',
+  hail: 'HAIL CLOUD',
+  lightning: 'THUNDER CLOUD',
+  blizzard: 'BLIZZARD CLOUD',
+  tornado: 'STORM TYRANT'
+};
+const BOSS_COLORS = {
+  rain: { base: '#5a6b8c', dark: '#3a4a6a', accent: '#7a9fff' },
+  hail: { base: '#6a8caa', dark: '#4a6c8a', accent: '#a0d4ff' },
+  lightning: { base: '#5a4a7a', dark: '#3a2a5a', accent: '#ffd86b' },
+  blizzard: { base: '#8aa0c0', dark: '#6a80a0', accent: '#d0e8ff' },
+  tornado: { base: '#4a3a5a', dark: '#2a1a3a', accent: '#ff4d6d' }
+};
 
-        // If the drop enters a warm (cleared) cell, splat a grey dot
-        const gx = Math.floor(r.x / CELL);
-        const gy = Math.floor(r.y / CELL);
-        if (gx >= 0 && gx < cols && gy >= 0 && gy < rows) {
-          if (warmthGrid[gy * cols + gx] > 0.5) {
-            paintGreyDot(r.x, r.y, 7);
-            raindrops.splice(i, 1);
-          }
-        }
+const boss = {
+  x: W / 2, y: 160,
+  tx: W / 2, ty: 160,
+  r: 80,
+  baseR: 80,
+  maxHealth: 100,
+  health: 100,
+  weatherType: 'rain',
+  alive: false,
+  scale: 1,
+  hover: 0,
+  hitFlash: 0,
+  attackTimer: 0,
+  attackPattern: 0,
+  angerLevel: 0,        // visual: eyes redder as level rises
+  spawnT: 0,            // spawn animation
+  cloudPuffs: [],
+
+  spawn(level) {
+    this.baseR = 70 + Math.min(level * 4, 30);
+    this.r = this.baseR;
+    this.x = W / 2; this.tx = W / 2;
+    this.y = -100; this.ty = 150;
+    this.maxHealth = 80 + level * 35;
+    this.health = this.maxHealth;
+    this.weatherType = WEATHER_TYPES[(level - 1) % WEATHER_TYPES.length];
+    this.alive = true;
+    this.hitFlash = 0;
+    this.attackTimer = 1.5;  // grace before first attack
+    this.attackPattern = 0;
+    this.angerLevel = Math.min(level - 1, 6);
+    this.spawnT = 0;
+    // Build cloud puffs
+    this.cloudPuffs = [];
+    const n = 7;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * TAU;
+      this.cloudPuffs.push({
+        ox: Math.cos(a) * this.baseR * 0.7,
+        oy: Math.sin(a) * this.baseR * 0.35,
+        r: rand(this.baseR * 0.55, this.baseR * 0.75),
+        phase: rand(0, TAU)
+      });
+    }
+    this.cloudPuffs.push({ ox: 0, oy: 0, r: this.baseR * 0.95, phase: 0 });
+
+    // Update ambient
+    G.ambientRain = this.weatherType === 'rain' ? 1 : (this.weatherType === 'blizzard' ? 0.6 : 0.2);
+    Audio.setRainVol(this.weatherType === 'rain' ? 0.15 : 0.05);
+
+    updateBossBarUI();
+  },
+
+  update(dt) {
+    if (!this.alive) return;
+    this.spawnT = Math.min(1, this.spawnT + dt / 30);
+    this.hover += dt / 60;
+
+    // Drift target (only after fully spawned)
+    if (this.spawnT >= 1 && Math.random() < 0.008) {
+      this.tx = rand(this.r + 40, W - this.r - 40);
+      this.ty = rand(120, 220);
+    }
+    // Spawn-in: drive Y from start (-100) to ty over spawnT
+    const spawnEase = 1 - Math.pow(1 - this.spawnT, 3);
+    const startY = -120;
+    this.y = lerp(startY, this.ty, spawnEase);
+    this.x = lerp(this.x, this.tx, 0.04 * dt);
+
+    if (this.hitFlash > 0) this.hitFlash -= dt / 60;
+
+    // Attack
+    this.attackTimer -= dt / 60;
+    if (this.attackTimer <= 0) {
+      this.attack();
+      const baseDelay = Math.max(0.6, 1.8 - G.level * 0.05);
+      this.attackTimer = baseDelay * rand(0.7, 1.3);
+    }
+
+    // Update puffs phase
+    for (const p of this.cloudPuffs) p.phase += dt * 0.01;
+  },
+
+  attack() {
+    this.attackPattern++;
+    const t = this.weatherType;
+    if (t === 'rain') {
+      // Spawn a rain column at random x
+      spawnRainColumn(rand(40, W - 40), rand(2, 3.5), 3 + Math.min(G.level, 5));
+    } else if (t === 'hail') {
+      const n = 2 + Math.min(G.level, 4);
+      for (let i = 0; i < n; i++) {
+        setTimeout(() => spawnHail(rand(40, W - 40), this.y + this.r * 0.5), i * 120);
+      }
+    } else if (t === 'lightning') {
+      spawnLightningWarning(player.x + rand(-60, 60));
+    } else if (t === 'blizzard') {
+      // Hail + lightning mix
+      spawnHail(rand(40, W - 40), this.y + this.r * 0.5);
+      spawnHail(rand(40, W - 40), this.y + this.r * 0.5);
+      if (Math.random() < 0.4) spawnLightningWarning(rand(60, W - 60));
+    } else if (t === 'tornado') {
+      // All attack types
+      const r = Math.random();
+      if (r < 0.4) {
+        for (let i = 0; i < 3; i++) setTimeout(() => spawnHail(rand(40, W - 40), this.y + this.r * 0.5), i * 100);
+      } else if (r < 0.75) {
+        spawnLightningWarning(player.x + rand(-80, 80));
+        setTimeout(() => spawnLightningWarning(player.x + rand(-100, 100)), 250);
+      } else {
+        spawnRainColumn(rand(40, W - 40), rand(2, 3), 4);
       }
     }
 
-    function updateRainOnly(dt) {
-      // Start-state rain: visual only, no splat (no warm cells exist)
-      const spawnRate = 40;
-      spawnAccumulator += spawnRate * dt;
-      while (spawnAccumulator >= 1) {
-        spawnRaindrop();
-        spawnAccumulator -= 1;
+    // Anger bonus: occasional bonus lightning at higher levels
+    if (G.level >= 4 && Math.random() < 0.15) {
+      setTimeout(() => spawnLightningWarning(rand(60, W - 60)), 400);
+    }
+  },
+
+  takeDamage(dmg) {
+    if (!this.alive) return;
+    this.health -= dmg;
+    this.hitFlash = 0.15;
+    shake(3);
+    Audio.hit();
+    // Hit particles
+    for (let i = 0; i < 6; i++) {
+      const a = rand(0, TAU);
+      spawnP({
+        x: projectiles.length ? projectiles[0].x : this.x,
+        y: projectiles.length ? projectiles[0].y : this.y - this.r * 0.5,
+        vx: Math.cos(a) * rand(1, 3),
+        vy: Math.sin(a) * rand(1, 3) - 1,
+        life: 0.4, size: rand(2, 4),
+        color: '#ffd86b', glow: true
+      });
+    }
+    if (this.health <= 0) {
+      this.die();
+    }
+    updateBossBarUI();
+  },
+
+  die() {
+    this.alive = false;
+    G.bossKills++;
+    G.score += 100 * G.level;
+    updateScoreUI();
+    Audio.bossDie();
+    shake(20);
+    flash('#ffd86b', 0.5);
+    // Big explosion
+    for (let i = 0; i < 80; i++) {
+      const a = rand(0, TAU);
+      const s = rand(2, 8);
+      spawnP({
+        x: this.x + rand(-this.r * 0.6, this.r * 0.6),
+        y: this.y + rand(-this.r * 0.4, this.r * 0.4),
+        vx: Math.cos(a) * s, vy: Math.sin(a) * s,
+        life: rand(0.8, 1.6), size: rand(3, 6),
+        color: ['#ffd86b', '#ff7e3d', '#fff5b0', '#ff4d6d'][randInt(0, 3)],
+        glow: true, grav: 0.08
+      });
+    }
+    // Sunny burst
+    G.sunBurstT = 1.5;
+    Audio.stopRain();
+    document.getElementById('bossBar').classList.remove('visible');
+    // Show power-up selection
+    setTimeout(() => showPowerupSelect(), 1200);
+  },
+
+  draw() {
+    if (!this.alive) return;
+    const c = BOSS_COLORS[this.weatherType];
+    const spawnScale = this.spawnT < 1 ? lerp(0.3, 1, this.spawnT) : 1;
+    const spawnAlpha = this.spawnT < 1 ? this.spawnT : 1;
+
+    ctx.globalAlpha = spawnAlpha;
+
+    const cx = this.x;
+    const cy = this.y + Math.sin(this.hover * 1.5) * 6;
+    const r = this.r * spawnScale;
+
+    // Shadow under cloud
+    ctx.globalAlpha = spawnAlpha * 0.3;
+    const sh = ctx.createRadialGradient(cx, cy + r * 0.5, 0, cx, cy + r * 0.5, r * 1.4);
+    sh.addColorStop(0, 'rgba(0,0,0,0.5)');
+    sh.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = sh;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + r * 0.6, r * 1.4, r * 0.4, 0, 0, TAU);
+    ctx.fill();
+    ctx.globalAlpha = spawnAlpha;
+
+    // Cloud puffs
+    for (const p of this.cloudPuffs) {
+      const px = cx + p.ox;
+      const py = cy + p.oy + Math.sin(p.phase) * 3;
+      const pr = p.r * spawnScale;
+      const grad = ctx.createRadialGradient(px - pr * 0.3, py - pr * 0.3, 0, px, py, pr);
+      if (this.hitFlash > 0) {
+        grad.addColorStop(0, '#fff');
+        grad.addColorStop(1, c.accent);
+      } else {
+        grad.addColorStop(0, c.accent);
+        grad.addColorStop(0.4, c.base);
+        grad.addColorStop(1, c.dark);
       }
-      for (let i = raindrops.length - 1; i >= 0; i--) {
-        const r = raindrops[i];
-        r.y += r.vy * dt;
-        if (r.y > H + 20) raindrops.splice(i, 1);
-      }
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(px, py, pr, 0, TAU);
+      ctx.fill();
     }
 
-    function drawRain() {
-      if (raindrops.length === 0) return;
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.strokeStyle = '#ADD8E6';
+    // Eyes (angry)
+    const eyeY = cy - r * 0.1;
+    const eyeOffset = r * 0.28;
+    const eyeR = r * 0.13;
+    // Angry brows
+    ctx.strokeStyle = c.dark;
+    ctx.lineWidth = r * 0.06;
+    ctx.lineCap = 'round';
+    const browTilt = 0.3 + this.angerLevel * 0.05;
+    ctx.beginPath();
+    ctx.moveTo(cx - eyeOffset - eyeR, eyeY - eyeR * 1.8 + browTilt * eyeR);
+    ctx.lineTo(cx - eyeOffset + eyeR, eyeY - eyeR * 0.5 - browTilt * eyeR);
+    ctx.moveTo(cx + eyeOffset - eyeR, eyeY - eyeR * 0.5 - browTilt * eyeR);
+    ctx.lineTo(cx + eyeOffset + eyeR, eyeY - eyeR * 1.8 + browTilt * eyeR);
+    ctx.stroke();
+    // Eye whites
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(cx - eyeOffset, eyeY, eyeR, 0, TAU);
+    ctx.arc(cx + eyeOffset, eyeY, eyeR, 0, TAU);
+    ctx.fill();
+    // Pupils - track player
+    const dx = player.x - cx, dy = player.y - cy;
+    const da = Math.atan2(dy, dx);
+    const pupilOff = eyeR * 0.4;
+    const angerColor = this.angerLevel >= 3 ? '#ff4d6d' : '#1a1a2e';
+    ctx.fillStyle = angerColor;
+    ctx.beginPath();
+    ctx.arc(cx - eyeOffset + Math.cos(da) * pupilOff, eyeY + Math.sin(da) * pupilOff, eyeR * 0.5, 0, TAU);
+    ctx.arc(cx + eyeOffset + Math.cos(da) * pupilOff, eyeY + Math.sin(da) * pupilOff, eyeR * 0.5, 0, TAU);
+    ctx.fill();
+    // Glare in pupil
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(cx - eyeOffset + Math.cos(da) * pupilOff - 1, eyeY + Math.sin(da) * pupilOff - 1, eyeR * 0.15, 0, TAU);
+    ctx.arc(cx + eyeOffset + Math.cos(da) * pupilOff - 1, eyeY + Math.sin(da) * pupilOff - 1, eyeR * 0.15, 0, TAU);
+    ctx.fill();
+
+    // Mouth - changes with health
+    const mouthY = cy + r * 0.25;
+    const mouthHP = 1 - (this.health / this.maxHealth);
+    ctx.strokeStyle = c.dark;
+    ctx.lineWidth = r * 0.06;
+    ctx.beginPath();
+    if (mouthHP < 0.3) {
+      // Slight frown
+      ctx.moveTo(cx - r * 0.18, mouthY);
+      ctx.quadraticCurveTo(cx, mouthY + r * 0.06, cx + r * 0.18, mouthY);
+    } else if (mouthHP < 0.7) {
+      // Open mouth
+      ctx.moveTo(cx - r * 0.18, mouthY);
+      ctx.quadraticCurveTo(cx, mouthY + r * 0.18, cx + r * 0.18, mouthY);
+    } else {
+      // Roar
+      ctx.moveTo(cx - r * 0.2, mouthY);
+      ctx.quadraticCurveTo(cx, mouthY + r * 0.35, cx + r * 0.2, mouthY);
+      ctx.lineTo(cx + r * 0.12, mouthY + r * 0.05);
+      ctx.lineTo(cx - r * 0.12, mouthY + r * 0.05);
+      ctx.closePath();
+      ctx.fillStyle = c.dark;
+      ctx.fill();
+    }
+    ctx.stroke();
+
+    // Weather-type glow accent on cloud
+    if (this.weatherType === 'lightning' || this.weatherType === 'tornado') {
+      ctx.shadowBlur = 20;
+      ctx.shadowColor = c.accent;
+      ctx.strokeStyle = c.accent;
       ctx.lineWidth = 2;
+      ctx.globalAlpha = spawnAlpha * 0.4;
+      for (const p of this.cloudPuffs) {
+        ctx.beginPath();
+        ctx.arc(cx + p.ox, cy + p.oy + Math.sin(p.phase) * 3, p.r * spawnScale, 0, TAU);
+        ctx.stroke();
+      }
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = spawnAlpha;
+    }
+
+    ctx.globalAlpha = 1;
+  }
+};
+
+/* ---------- Hazards: Hail ---------- */
+const hails = [];
+function spawnHail(x, y) {
+  hails.push({
+    x, y,
+    vx: rand(-1, 1), vy: rand(2, 4),
+    r: rand(8, 14),
+    rot: rand(0, TAU),
+    spin: rand(-0.1, 0.1),
+    bounces: 0,
+    maxBounces: 2
+  });
+}
+function updateHails(dt) {
+  for (let i = hails.length - 1; i >= 0; i--) {
+    const h = hails[i];
+    h.x += h.vx * dt;
+    h.y += h.vy * dt;
+    h.vy += 0.35 * dt;
+    h.rot += h.spin * dt;
+    // Bounce on ground
+    if (h.y > H - 20 && h.bounces < h.maxBounces) {
+      h.y = H - 20;
+      h.vy *= -0.5;
+      h.vx *= 0.7;
+      h.bounces++;
+      // Splash
+      for (let k = 0; k < 6; k++) {
+        spawnP({
+          x: h.x, y: H - 10,
+          vx: rand(-2, 2), vy: rand(-3, -1),
+          life: 0.3, size: rand(1, 3),
+          color: '#a0d4ff', glow: true, grav: 0.2
+        });
+      }
+      Audio.hail();
+    }
+    // Collision with player
+    if (circleHit(h, player, player.r * 0.9)) {
+      player.hurt();
+      hails.splice(i, 1);
+      continue;
+    }
+    if (h.y > H + 50) hails.splice(i, 1);
+  }
+}
+function drawHails() {
+  for (const h of hails) {
+    ctx.save();
+    ctx.translate(h.x, h.y);
+    ctx.rotate(h.rot);
+    const grad = ctx.createLinearGradient(-h.r, -h.r, h.r, h.r);
+    grad.addColorStop(0, '#e8f4ff');
+    grad.addColorStop(0.5, '#a0d4ff');
+    grad.addColorStop(1, '#5080b0');
+    ctx.fillStyle = grad;
+    ctx.shadowBlur = 6;
+    ctx.shadowColor = '#a0d4ff';
+    // Ice cube shape
+    ctx.fillRect(-h.r, -h.r, h.r * 2, h.r * 2);
+    ctx.shadowBlur = 0;
+    // Highlight
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.fillRect(-h.r * 0.7, -h.r * 0.7, h.r * 0.6, h.r * 0.3);
+    ctx.restore();
+  }
+}
+
+/* ---------- Lightning ---------- */
+const lightnings = [];
+function spawnLightningWarning(targetX) {
+  lightnings.push({
+    x: targetX,
+    state: 'warning',
+    t: 0,
+    warnDur: 1.0,
+    strikeT: 0,
+    strikeDur: 0.3,
+    bolt: null
+  });
+}
+function updateLightnings(dt) {
+  for (let i = lightnings.length - 1; i >= 0; i--) {
+    const l = lightnings[i];
+    l.t += dt / 60;
+    if (l.state === 'warning' && l.t >= l.warnDur) {
+      l.state = 'strike';
+      l.t = 0;
+      Audio.lightning();
+      shake(10);
+      flash('#fff', 0.3);
+      // Build jagged bolt
+      l.bolt = [];
+      let cx = l.x, cy = 0;
+      const segs = 12;
+      for (let s = 0; s <= segs; s++) {
+        l.bolt.push({ x: cx, y: cy });
+        cy += H / segs;
+        cx += rand(-25, 25);
+      }
+      // Check player hit
+      if (Math.abs(player.x - l.x) < 30 && player.y > 50) {
+        player.hurt();
+      }
+      // Spawn impact particles
+      for (let k = 0; k < 25; k++) {
+        const a = rand(0, TAU);
+        spawnP({
+          x: l.x, y: H - 10,
+          vx: Math.cos(a) * rand(2, 6),
+          vy: Math.sin(a) * rand(2, 6) - 2,
+          life: rand(0.4, 0.8), size: rand(2, 5),
+          color: '#fff5b0', glow: true, grav: 0.1
+        });
+      }
+    }
+    if (l.state === 'strike' && l.t >= l.strikeDur) {
+      lightnings.splice(i, 1);
+    }
+  }
+}
+function drawLightnings() {
+  for (const l of lightnings) {
+    if (l.state === 'warning') {
+      // Telegraph: red warning marker
+      const pulse = 0.5 + Math.sin(l.t * 20) * 0.5;
+      ctx.globalAlpha = 0.4 + pulse * 0.4;
+      ctx.fillStyle = '#ff4d6d';
+      ctx.shadowBlur = 20;
+      ctx.shadowColor = '#ff4d6d';
+      // Vertical warning line
+      ctx.fillRect(l.x - 4, 0, 8, H);
+      // Marker on ground
+      ctx.beginPath();
+      ctx.ellipse(l.x, H - 10, 30, 8, 0, 0, TAU);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 1;
+    } else if (l.state === 'strike' && l.bolt) {
+      const fade = 1 - l.t / l.strikeDur;
+      ctx.globalAlpha = fade;
+      // Outer glow
+      ctx.shadowBlur = 30;
+      ctx.shadowColor = '#fff5b0';
+      ctx.strokeStyle = '#fff5b0';
+      ctx.lineWidth = 8;
       ctx.lineCap = 'round';
       ctx.beginPath();
-      for (const r of raindrops) {
-        ctx.moveTo(r.x, r.y);
-        ctx.lineTo(r.x, r.y - r.length);
+      ctx.moveTo(l.bolt[0].x, l.bolt[0].y);
+      for (let s = 1; s < l.bolt.length; s++) {
+        ctx.lineTo(l.bolt[s].x, l.bolt[s].y);
       }
       ctx.stroke();
-    }
-
-    // ===== Weather: Edge creep =========================================
-    function updateEdgeCreep(dt) {
-      // Each frame, paint a thin new strip just inside the current band.
-      // Erased portions of the band stay erased; the band keeps advancing.
-      const newDist = lastEdgePaint + EDGE_CREEP_SPEED * intensity * dt;
-      if (newDist > lastEdgePaint) {
-        const thickness = (newDist - lastEdgePaint) + 0.6; // small overlap to avoid gaps
-        paintGreyRect(0, lastEdgePaint, W, thickness);          // top
-        paintGreyRect(0, H - newDist, W, thickness);          // bottom
-        paintGreyRect(lastEdgePaint, 0, thickness, H);        // left
-        paintGreyRect(W - newDist, 0, thickness, H);          // right
-        lastEdgePaint = newDist;
-      }
-    }
-
-    // ===== Weather: Wind gusts ========================================
-    function updateWind(dt) {
-      windTimer -= dt;
-      if (windTimer <= 0 && !windGust) {
-        const dir = Math.random() < 0.5 ? 1 : -1;
-        const y = 40 + Math.random() * (H - 80);
-        windGust = {
-          x: dir > 0 ? -30 : W + 30,
-          vx: (480 + intensity * 80) * dir,
-          y: y,
-          width: 14
-        };
-        // Paint a horizontal grey streak across the screen at the gust's y
-        paintGreyRect(0, y - windGust.width / 2, W, windGust.width);
-        // Schedule next gust (more frequent as intensity rises)
-        windTimer = Math.max(3, 9 / intensity) + Math.random() * 3;
-      }
-
-      if (windGust) {
-        windGust.x += windGust.vx * dt;
-        // Push raindrops sideways while gust is active
-        const shift = windGust.vx * dt * 0.5;
-        for (const r of raindrops) {
-          r.x += shift;
-        }
-        if ((windGust.vx > 0 && windGust.x > W + 30) ||
-            (windGust.vx < 0 && windGust.x < -30)) {
-          windGust = null;
-        }
-      }
-    }
-
-    function drawWindGust() {
-      if (!windGust) return;
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.strokeStyle = '#FFFFFF';
+      // Core
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = '#fff';
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.moveTo(windGust.x, 0);
-      ctx.lineTo(windGust.x, H);
+      ctx.moveTo(l.bolt[0].x, l.bolt[0].y);
+      for (let s = 1; s < l.bolt.length; s++) {
+        ctx.lineTo(l.bolt[s].x, l.bolt[s].y);
+      }
       ctx.stroke();
+      ctx.globalAlpha = 1;
     }
+  }
+}
 
-    // ===== UI ==========================================================
-    function drawUI() {
-      ctx.globalCompositeOperation = 'source-over';
-      const warmthPct = Math.max(0, Math.min(1, warmCellCount / totalCells));
-      const warmthPctInt = Math.floor(warmthPct * 100);
-
-      // Score (top-left)
-      ctx.font = 'bold 16px sans-serif';
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'top';
-      ctx.fillStyle = '#FFFFFF';
-      ctx.fillText('Score ' + Math.floor(score), 16, 16);
-
-      // Warmth label (top-right)
-      ctx.textAlign = 'right';
-      ctx.fillText('Warmth ' + warmthPctInt + '%', W - 16, 16);
-
-      // Warmth meter - solid white bar at the top
-      const barX = 16, barY = 42, barW = W - 32, barH = 10;
-      ctx.strokeStyle = '#FFFFFF';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(barX, barY, barW, barH);
-      ctx.fillStyle = '#FFFFFF';
-      ctx.fillRect(barX + 1, barY + 1, (barW - 2) * warmthPct, barH - 2);
+/* ---------- Rain columns ---------- */
+const rainColumns = [];
+function spawnRainColumn(x, intensity, duration) {
+  rainColumns.push({
+    x, w: rand(60, 100),
+    y: 0, h: H,
+    intensity,
+    life: duration,
+    drops: []
+  });
+}
+function updateRainColumns(dt) {
+  for (let i = rainColumns.length - 1; i >= 0; i--) {
+    const r = rainColumns[i];
+    r.life -= dt / 60;
+    // Spawn raindrop visuals
+    if (Math.random() < r.intensity * 0.5) {
+      r.drops.push({
+        x: r.x + rand(-r.w / 2, r.w / 2),
+        y: 0,
+        vy: rand(10, 16),
+        len: rand(10, 18)
+      });
     }
-
-    function drawStartText() {
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.fillStyle = '#FFFFFF';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.font = 'bold 28px sans-serif';
-      ctx.fillText("It's cold.", W / 2, H / 2 - 20);
-      ctx.font = '20px sans-serif';
-      ctx.fillText('Touch to warm it up.', W / 2, H / 2 + 20);
+    // Update drops
+    for (let j = r.drops.length - 1; j >= 0; j--) {
+      const d = r.drops[j];
+      d.y += d.vy * dt;
+      if (d.y > H) r.drops.splice(j, 1);
     }
-
-    function drawGameOver() {
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.fillStyle = '#FFFFFF';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-
-      ctx.font = 'bold 44px sans-serif';
-      ctx.fillText('Game Over', W / 2, H / 2 - 100);
-
-      ctx.font = '22px sans-serif';
-      ctx.fillText('Final Score: ' + Math.floor(score), W / 2, H / 2 - 30);
-      ctx.fillText('Best: ' + bestScore, W / 2, H / 2 + 10);
-
-      // Again button (solid white rectangle, orange label)
-      const btnW = 180, btnH = 64;
-      const btnX = W / 2 - btnW / 2;
-      const btnY = H / 2 + 60;
-      ctx.fillStyle = '#FFFFFF';
-      ctx.fillRect(btnX, btnY, btnW, btnH);
-      ctx.fillStyle = '#FF8C00';
-      ctx.font = 'bold 28px sans-serif';
-      ctx.fillText('Again', W / 2, btnY + btnH / 2);
+    if (r.life <= 0) rainColumns.splice(i, 1);
+  }
+}
+function drawRainColumns() {
+  for (const r of rainColumns) {
+    // Misty column
+    const grad = ctx.createLinearGradient(r.x - r.w / 2, 0, r.x + r.w / 2, 0);
+    grad.addColorStop(0, 'rgba(120, 160, 220, 0)');
+    grad.addColorStop(0.5, 'rgba(120, 160, 220, 0.25)');
+    grad.addColorStop(1, 'rgba(120, 160, 220, 0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(r.x - r.w / 2, 0, r.w, H);
+    // Raindrop streaks
+    ctx.strokeStyle = 'rgba(180, 210, 255, 0.7)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (const d of r.drops) {
+      ctx.moveTo(d.x, d.y);
+      ctx.lineTo(d.x, d.y + d.len);
     }
+    ctx.stroke();
+  }
+}
 
-    function isTapInAgainButton(x, y) {
-      const btnW = 180, btnH = 64;
-      const btnX = W / 2 - btnW / 2;
-      const btnY = H / 2 + 60;
-      return x >= btnX && x <= btnX + btnW && y >= btnY && y <= btnY + btnH;
+/* ---------- Ambient weather (snow / drift particles) ---------- */
+const ambient = [];
+function spawnAmbient() {
+  if (G.state !== STATE.PLAYING && G.state !== STATE.POWERUP) return;
+  const wt = boss.weatherType;
+  if (Math.random() < 0.3) {
+    if (wt === 'blizzard') {
+      ambient.push({
+        x: rand(-50, W + 50), y: -10,
+        vx: rand(-1, 1) - 2, vy: rand(1, 3),
+        r: rand(1, 3), life: 1, type: 'snow'
+      });
+    } else if (wt === 'rain' || wt === 'tornado') {
+      ambient.push({
+        x: rand(-50, W + 50), y: -10,
+        vx: -1, vy: rand(8, 14),
+        r: 1, life: 1, type: 'rain', len: rand(8, 14)
+      });
+    } else if (wt === 'lightning') {
+      ambient.push({
+        x: rand(0, W), y: rand(0, H),
+        vx: rand(-0.2, 0.2), vy: rand(-0.2, 0.2),
+        r: rand(0.5, 1.5), life: 1, type: 'dust'
+      });
     }
-
-    // ===== Game flow ===================================================
-    function resetState() {
-      score = 0;
-      elapsed = 0;
-      intensity = 1;
-      hasErased = false;
-      raindrops = [];
-      spawnAccumulator = 0;
-      windGust = null;
-      windTimer = 4;
-      lastEdgePaint = 0;
-      lastPos = null;
-      warmthGrid.fill(0);
-      warmCellCount = 0;
-      // Reset destroy layer to fully grey
-      dctx.globalCompositeOperation = 'source-over';
-      dctx.fillStyle = '#333333';
-      dctx.fillRect(0, 0, W, H);
+  }
+}
+function updateAmbient(dt) {
+  for (let i = ambient.length - 1; i >= 0; i--) {
+    const a = ambient[i];
+    a.x += a.vx * dt;
+    a.y += a.vy * dt;
+    if (a.y > H + 20 || a.x < -100 || a.x > W + 100) ambient.splice(i, 1);
+  }
+}
+function drawAmbient() {
+  for (const a of ambient) {
+    if (a.type === 'snow') {
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.beginPath();
+      ctx.arc(a.x, a.y, a.r, 0, TAU);
+      ctx.fill();
+    } else if (a.type === 'rain') {
+      ctx.strokeStyle = 'rgba(160, 200, 255, 0.4)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(a.x, a.y + a.len);
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = 'rgba(180, 180, 220, 0.3)';
+      ctx.beginPath();
+      ctx.arc(a.x, a.y, a.r, 0, TAU);
+      ctx.fill();
     }
+  }
+}
 
-    function resetToStart() {
-      resetState();
-      state = STATE_START;
-    }
+/* ---------- Collision helper ---------- */
+function circleHit(a, b, r) {
+  const dx = a.x - b.x, dy = a.y - b.y;
+  return dx * dx + dy * dy < (r + a.r) * (r + a.r);
+}
 
-    function startGame() {
-      resetState();
-      state = STATE_PLAYING;
-    }
+/* ---------- Screen effects ---------- */
+function shake(amt) { G.shakeAmt = Math.max(G.shakeAmt, amt); }
+function flash(color, alpha) {
+  G.flashAlpha = Math.max(G.flashAlpha, alpha);
+  G.flashColor = color;
+}
 
-    function gameOver() {
-      state = STATE_GAMEOVER;
-      // Snap screen to fully solid grey
-      dctx.globalCompositeOperation = 'source-over';
-      dctx.fillStyle = '#333333';
-      dctx.fillRect(0, 0, W, H);
-      warmthGrid.fill(0);
-      warmCellCount = 0;
-      raindrops = [];
-      windGust = null;
-      // Persist best score
-      if (Math.floor(score) > bestScore) {
-        bestScore = Math.floor(score);
-        try { localStorage.setItem('weatherDestroyerBest', String(bestScore)); } catch (e) {}
-      }
-    }
+/* ---------- Power-up definitions ---------- */
+const POWERUPS = [
+  { id: 'spread', name: 'Spread Shot', desc: 'Fire 3 Sunbeams in a fan', icon: '⟡', apply: () => { player.spread = true; } },
+  { id: 'shield', name: 'Umbrella Shield', desc: 'Blocks the next 2 hits', icon: '☂', apply: () => { player.shield = true; player.shieldHits = 2; } },
+  { id: 'overcharge', name: 'Overcharge', desc: '3x fire rate for 12s', icon: '⚡', apply: () => { player.overcharge = 12; } },
+  { id: 'damage', name: 'Solar Flare', desc: 'Double damage permanently', icon: '☀', apply: () => { player.doubleDamage = 9999; } },
+  { id: 'lifesteal', name: 'Heart Sun', desc: 'Restore 1 life', icon: '❤', apply: () => { G.lives = Math.min(G.lives + 1, 5); updateLivesUI(); } },
+  { id: 'firerate', name: 'Steady Beam', desc: 'Permanent +30% fire rate', icon: '➤', apply: () => { player.fireRate = Math.max(80, player.fireRate * 0.7); } },
+];
 
-    // ===== Update / Draw ==============================================
-    function update(dt) {
-      elapsed += dt;
-      score += dt * 10;
-      // Intensity ramps every 30 seconds of survival
-      intensity = 1 + Math.floor(elapsed / 30) * 0.5;
+function showPowerupSelect() {
+  G.state = STATE.POWERUP;
+  // Pick 3 random power-ups
+  const pool = [...POWERUPS];
+  // Shuffle
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = randInt(0, i);
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  const choices = pool.slice(0, 3);
+  const cardsEl = document.getElementById('puCards');
+  cardsEl.innerHTML = '';
+  for (const pu of choices) {
+    const card = document.createElement('div');
+    card.className = 'puCard';
+    card.innerHTML = `
+      <div class="puIcon">${pu.icon}</div>
+      <div class="puInfo">
+        <div class="puName">${pu.name}</div>
+        <div class="puDesc">${pu.desc}</div>
+      </div>
+    `;
+    card.addEventListener('click', () => {
+      Audio.powerup();
+      pu.apply();
+      updatePowerupStrip();
+      document.getElementById('powerupScreen').classList.remove('visible');
+      nextBoss();
+    });
+    cardsEl.appendChild(card);
+  }
+  document.getElementById('powerupScreen').classList.add('visible');
+}
 
-      updateRain(dt);
-      updateEdgeCreep(dt);
-      updateWind(dt);
+function updatePowerupStrip() {
+  const strip = document.getElementById('powerupStrip');
+  strip.innerHTML = '';
+  const active = [];
+  if (player.spread) active.push('Spread');
+  if (player.shield) active.push(`Shield (${player.shieldHits})`);
+  if (player.overcharge > 0) active.push(`Overcharge ${player.overcharge.toFixed(1)}s`);
+  if (player.doubleDamage > 0) active.push('2x DMG');
+  for (const a of active) {
+    const chip = document.createElement('div');
+    chip.className = 'puChip';
+    chip.textContent = a;
+    strip.appendChild(chip);
+  }
+  strip.classList.toggle('visible', active.length > 0 && G.state === STATE.PLAYING);
+}
 
-      // Fail state: warmth collapsed to zero after the player has engaged
-      if (hasErased && warmCellCount <= 0) {
-        gameOver();
-      }
-    }
+/* ---------- UI updates ---------- */
+function updateLivesUI() {
+  const el = document.getElementById('lives');
+  el.innerHTML = '';
+  for (let i = 0; i < 3; i++) {
+    const d = document.createElement('div');
+    d.className = 'life' + (i >= G.lives ? ' lost' : '');
+    el.appendChild(d);
+  }
+}
+function updateScoreUI() {
+  document.getElementById('scoreVal').textContent = G.score;
+  document.getElementById('levelTag').textContent = 'Lv. ' + G.level;
+}
+function updateBossBarUI() {
+  if (!boss.alive) {
+    document.getElementById('bossBar').classList.remove('visible');
+    return;
+  }
+  document.getElementById('bossBar').classList.add('visible');
+  document.getElementById('bossName').textContent = BOSS_NAMES[boss.weatherType];
+  const pct = Math.max(0, boss.health / boss.maxHealth) * 100;
+  document.getElementById('bossBarFill').style.width = pct + '%';
+}
 
-    function draw() {
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.clearRect(0, 0, W, H);
-      // Composite the destruction layer (transparent where erased -> orange body shows through)
-      ctx.drawImage(destroyCanvas, 0, 0);
-      // Weather visuals on top of the destruction layer
-      drawRain();
-      drawWindGust();
-      // State-specific overlay
-      if (state === STATE_PLAYING)      drawUI();
-      else if (state === STATE_START)   drawStartText();
-      else if (state === STATE_GAMEOVER) drawGameOver();
-    }
+/* ---------- Game flow ---------- */
+function startGame() {
+  Audio.init();
+  Audio.startRain();
+  G.state = STATE.PLAYING;
+  G.score = 0; G.level = 1; G.lives = 3; G.bossKills = 0;
+  G.shakeAmt = 0; G.hitstop = 0; G.flashAlpha = 0; G.sunBurstT = 0;
+  projectiles.length = 0; hails.length = 0; lightnings.length = 0; rainColumns.length = 0; ambient.length = 0;
+  for (const p of particles) p.active = false;
+  player.reset();
+  boss.spawn(G.level);
+  updateLivesUI();
+  updateScoreUI();
+  updatePowerupStrip();
+  document.getElementById('startScreen').classList.remove('visible');
+  document.getElementById('gameOverScreen').classList.remove('visible');
+  document.getElementById('powerupScreen').classList.remove('visible');
+  document.getElementById('hud').classList.add('visible');
+}
 
-    // ===== Game loop ===================================================
-    function loop(timestamp) {
-      const dt = Math.min(0.05, (timestamp - lastTime) / 1000); // clamp to 50ms
-      lastTime = timestamp;
+function nextBoss() {
+  G.level++;
+  G.state = STATE.PLAYING;
+  projectiles.length = 0; hails.length = 0; lightnings.length = 0; rainColumns.length = 0; ambient.length = 0;
+  boss.spawn(G.level);
+  updateScoreUI();
+  updatePowerupStrip();
+  Audio.startRain();
+}
 
-      if (state === STATE_PLAYING)      update(dt);
-      else if (state === STATE_START)   updateRainOnly(dt);
+function gameOver() {
+  G.state = STATE.GAMEOVER;
+  boss.alive = false;
+  Audio.stopRain();
+  // Save high score
+  let newRecord = false;
+  if (G.score > G.highScore) { G.highScore = G.score; newRecord = true; }
+  if (G.level > G.highLevel) { G.highLevel = G.level; newRecord = true; }
+  try {
+    localStorage.setItem('wbf_highScore', String(G.highScore));
+    localStorage.setItem('wbf_highLevel', String(G.highLevel));
+  } catch (e) {}
+  document.getElementById('goScore').textContent = G.score;
+  document.getElementById('goLevel').textContent = G.level;
+  const best = document.getElementById('goBest');
+  best.textContent = `Best: ${G.highScore} · Lv. ${G.highLevel}`;
+  best.classList.toggle('newRecord', newRecord);
+  if (newRecord) best.textContent = `NEW RECORD! Best: ${G.highScore} · Lv. ${G.highLevel}`;
+  document.getElementById('hud').classList.remove('visible');
+  document.getElementById('bossBar').classList.remove('visible');
+  document.getElementById('powerupStrip').classList.remove('visible');
+  setTimeout(() => {
+    document.getElementById('gameOverScreen').classList.add('visible');
+  }, 800);
+}
 
-      draw();
-      requestAnimationFrame(loop);
-    }
+/* ---------- Button handlers ---------- */
+document.getElementById('startBtn').addEventListener('click', () => {
+  startGame();
+});
+document.getElementById('restartBtn').addEventListener('click', () => {
+  document.getElementById('gameOverScreen').classList.remove('visible');
+  startGame();
+});
 
-    // ===== Input =======================================================
-    function getEventPos(e) {
-      const t = (e.touches && e.touches[0]) ||
-                (e.changedTouches && e.changedTouches[0]) ||
-                e;
-      const rect = canvas.getBoundingClientRect();
-      return { x: t.clientX - rect.left, y: t.clientY - rect.top };
-    }
+/* ---------- Main loop ---------- */
+let lastTime = performance.now();
+function loop(now) {
+  const rawDt = now - lastTime;
+  lastTime = now;
+  let dt = Math.min(rawDt / 16.67, 2.5);   // capped delta in 60fps frames
+  if (G.paused) { requestAnimationFrame(loop); return; }
 
-    function handleStart(e) {
-      e.preventDefault();
-      const p = getEventPos(e);
+  // Hitstop
+  if (G.hitstop > 0) {
+    G.hitstop -= 1;
+    dt *= 0.05;
+  }
 
-      if (state === STATE_START) {
-        startGame();
-        erase(p.x, p.y, 40);
-        lastPos = p;
-        return;
-      }
-      if (state === STATE_GAMEOVER) {
-        if (isTapInAgainButton(p.x, p.y)) {
-          resetToStart();
+  G.time += dt;
+
+  /* --- Update --- */
+  if (G.state === STATE.PLAYING) {
+    player.update(dt, now);
+    boss.update(dt);
+    updateProjectiles(dt);
+    updateHails(dt);
+    updateLightnings(dt);
+    updateRainColumns(dt);
+    updateAmbient(dt);
+    spawnAmbient();
+    updateParticles(dt);
+
+    // Projectile-boss collision
+    if (boss.alive) {
+      for (let i = projectiles.length - 1; i >= 0; i--) {
+        const p = projectiles[i];
+        if (circleHit(p, boss, boss.r * 0.85)) {
+          boss.takeDamage(p.dmg);
+          // Impact particles
+          for (let k = 0; k < 4; k++) {
+            spawnP({
+              x: p.x, y: p.y,
+              vx: rand(-2, 2), vy: rand(-2, 2),
+              life: 0.3, size: rand(2, 4),
+              color: '#ffd86b', glow: true
+            });
+          }
+          projectiles.splice(i, 1);
         }
-        return;
       }
-      // PLAYING
-      erase(p.x, p.y, 40);
-      lastPos = p;
     }
 
-    function handleMove(e) {
-      e.preventDefault();
-      if (state !== STATE_PLAYING) return;
-      const p = getEventPos(e);
-      if (lastPos) eraseLine(lastPos.x, lastPos.y, p.x, p.y, 40);
-      else         erase(p.x, p.y, 40);
-      lastPos = p;
+    if (player.overcharge > 0) updatePowerupStrip();
+
+  } else if (G.state === STATE.POWERUP || G.state === STATE.GAMEOVER) {
+    updateParticles(dt);
+    updateAmbient(dt);
+    spawnAmbient();
+  } else {
+    // Start screen ambient
+    updateParticles(dt);
+    if (Math.random() < 0.5) {
+      spawnP({
+        x: rand(0, W), y: H + 10,
+        vx: rand(-0.3, 0.3), vy: rand(-1.5, -0.5),
+        life: rand(2, 4), size: rand(1, 3),
+        color: ['#ffd86b', '#ff7e3d'][randInt(0,1)], glow: true, grav: -0.02
+      });
     }
+  }
 
-    function handleEnd(e) {
-      e.preventDefault();
-      lastPos = null;
-    }
+  // Decay effects
+  G.shakeAmt *= Math.pow(0.85, dt);
+  G.flashAlpha *= Math.pow(0.85, dt);
+  if (G.sunBurstT > 0) G.sunBurstT -= dt / 60;
 
-    // Touch (primary on mobile)
-    canvas.addEventListener('touchstart',  handleStart, { passive: false });
-    canvas.addEventListener('touchmove',   handleMove,  { passive: false });
-    canvas.addEventListener('touchend',   handleEnd,   { passive: false });
-    canvas.addEventListener('touchcancel', handleEnd,   { passive: false });
+  // Background tint shifts toward sunny during sunburst
+  const sunny = G.sunBurstT > 0 ? Math.min(1, G.sunBurstT) : 0;
+  const targetR = lerp(10, 255, sunny);
+  const targetG = lerp(14, 200, sunny);
+  const targetB = lerp(39, 80, sunny);
+  G.bgTintR = lerp(G.bgTintR, targetR, 0.05 * dt);
+  G.bgTintG = lerp(G.bgTintG, targetG, 0.05 * dt);
+  G.bgTintB = lerp(G.bgTintB, targetB, 0.05 * dt);
 
-    // Mouse (desktop testing)
-    canvas.addEventListener('mousedown', (e) => { e.preventDefault(); handleStart(e); });
-    canvas.addEventListener('mousemove', (e) => { if (e.buttons === 1) handleMove(e); });
-    canvas.addEventListener('mouseup',   handleEnd);
-    canvas.addEventListener('mouseleave', handleEnd);
+  /* --- Render --- */
+  // Background
+  const bgGrad = ctx.createLinearGradient(0, 0, 0, H);
+  const r = Math.round(G.bgTintR), g = Math.round(G.bgTintG), b = Math.round(G.bgTintB);
+  bgGrad.addColorStop(0, `rgb(${r}, ${g}, ${b})`);
+  bgGrad.addColorStop(0.5, `rgb(${Math.round(r*1.4)}, ${Math.round(g*1.3)}, ${Math.round(b*1.2)})`);
+  bgGrad.addColorStop(1, `rgb(${Math.round(r*1.8)}, ${Math.round(g*1.5)}, ${Math.round(b*1.1)})`);
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, W, H);
 
-    // Resize: re-init everything and return to start state
-    window.addEventListener('resize', () => {
-      setupCanvas();
-      resetToStart();
-    });
+  // Stars / dust in background
+  ctx.globalAlpha = 0.5;
+  for (let i = 0; i < 30; i++) {
+    const sx = (i * 137.5) % W;
+    const sy = (i * 73.3) % H;
+    const tw = 0.3 + Math.sin(G.time * 0.02 + i) * 0.3;
+    ctx.globalAlpha = 0.3 * tw + 0.1;
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(sx, sy, 1.5, 1.5);
+  }
+  ctx.globalAlpha = 1;
 
-    // ===== Boot ========================================================
-    setupCanvas();
-    requestAnimationFrame((t) => {
-      lastTime = t;
-      requestAnimationFrame(loop);
-    });
-  </script>
+  // Apply shake transform
+  const sx = (Math.random() - 0.5) * G.shakeAmt;
+  const sy = (Math.random() - 0.5) * G.shakeAmt;
+  ctx.save();
+  ctx.translate(sx, sy);
+
+  // Game world
+  if (G.state === STATE.PLAYING || G.state === STATE.POWERUP) {
+    drawAmbient();
+    drawRainColumns();
+    boss.draw();
+    drawHails();
+    drawLightnings();
+    drawProjectiles();
+    drawParticles();
+    if (G.state === STATE.PLAYING) player.draw();
+  } else if (G.state === STATE.START) {
+    drawParticles();
+  } else if (G.state === STATE.GAMEOVER) {
+    drawParticles();
+    drawAmbient();
+  }
+
+  ctx.restore();
+
+  // Flash overlay
+  if (G.flashAlpha > 0.01) {
+    ctx.globalAlpha = G.flashAlpha;
+    ctx.fillStyle = G.flashColor;
+    ctx.fillRect(0, 0, W, H);
+    ctx.globalAlpha = 1;
+  }
+
+  // Sunburst golden vignette
+  if (G.sunBurstT > 0) {
+    const a = Math.min(0.4, G.sunBurstT * 0.3);
+    const grad = ctx.createRadialGradient(W/2, H/2, 0, W/2, H/2, Math.max(W, H));
+    grad.addColorStop(0, `rgba(255, 216, 107, 0)`);
+    grad.addColorStop(0.7, `rgba(255, 216, 107, 0)`);
+    grad.addColorStop(1, `rgba(255, 154, 61, ${a})`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+/* Initial UI render */
+updateLivesUI();
+updateScoreUI();
+updatePowerupStrip();
+
+/* Prevent context menu on long press */
+window.addEventListener('contextmenu', (e) => e.preventDefault());
+
+</script>
 </body>
 </html>
